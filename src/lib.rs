@@ -62,12 +62,14 @@ impl LineHistory {
         let default_index = self.history_data.len();
         let next_line_num = self.date_indices.get(next_index).unwrap_or(&default_index).to_owned();
 
-        for (i, line) in self.history_data[start_line_num..next_line_num].iter().enumerate() {
-            result.push_str(&create_line_with_time(line, i, &date_input));
+        for (_i, line) in self.history_data[start_line_num..next_line_num].iter().enumerate() {
+            // result.push_str(&create_line_with_time(line, i, &date_input));
+            result.push_str(&format!("{}\n", line));
         }
 
         result.push_str(
-            &format!("{}行<br>", next_line_num - start_line_num)
+            // &format!("{}行<br>", next_line_num - start_line_num)
+            &format!("{}行\n", next_line_num - start_line_num)
         );
 
         result
