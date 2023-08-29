@@ -1,4 +1,4 @@
-use history_viewer::LineHistory;
+use line_history::LineHistory;
 use std::fs;
 
 fn read() -> String {

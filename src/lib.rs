@@ -21,6 +21,11 @@ pub struct LineHistory {
     pub date_array: Vec<NaiveDate>,
 }
 
+pub struct LineId {
+    pub date: NaiveDate,
+    pub line_count: usize,
+}
+
 impl LineHistory {
     pub fn new(data: &str) -> Self {
         let _data = data
@@ -74,6 +79,39 @@ impl LineHistory {
 
         result
     }
+
+    pub fn search_by_keyword(&self, keyword: &str) -> Vec<LineId> {
+        let _keyword = &keyword
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
+        let re_keyword = Regex::new(_keyword).unwrap();
+
+        let mut result = Vec::<LineId>::new();
+        let mut date = NaiveDate::default();
+        let mut count_start: usize = 0;
+
+        let re_date = re_date();
+
+        for (i, line) in self.history_data.iter().enumerate() {
+            if re_date.is_match(line) {
+                let date_tmp = NaiveDate::generate_date(&line[0..10]);
+                if date_tmp >= date {
+                    date = NaiveDate::generate_date(&line[0..10]);
+                    count_start = i;
+                }
+            } else if re_keyword.find(line).is_some() {
+                let line_count = i - count_start;
+
+                let data = LineId {
+                    date,
+                    line_count,
+                };
+                result.push(data);
+            }
+        }
+
+        result
+    }
 }
 
 fn calc_date_indices(history_data: &[String]) -> HashMap<NaiveDate, usize> {
@@ -95,25 +133,25 @@ fn calc_date_indices(history_data: &[String]) -> HashMap<NaiveDate, usize> {
     result
 }
 
-fn create_line_with_time(line: &str, line_count: usize, date: &NaiveDate) -> String {
-    let mut line_info: Vec<&str> = line.split('\t').collect();
-    let new_info: String;
-    if line_info.len() >= 2 {
-        new_info = format!(
-            "<a href=\"javascript:showLineInfoAlert(\'{}\',{});\">{}</a>", 
-            date.format(YMD_PATTERN), 
-            line_count,
-            line_info[0]
-        );
-        line_info[0] = &new_info;
-    }
+// fn create_line_with_time(line: &str, line_count: usize, date: &NaiveDate) -> String {
+//     let mut line_info: Vec<&str> = line.split('\t').collect();
+//     let new_info: String;
+//     if line_info.len() >= 2 {
+//         new_info = format!(
+//             "<a href=\"javascript:showLineInfoAlert(\'{}\',{});\">{}</a>", 
+//             date.format(YMD_PATTERN), 
+//             line_count,
+//             line_info[0]
+//         );
+//         line_info[0] = &new_info;
+//     }
 
-    format!(
-        "<span id=\"{}\">{}</span><br>\n",
-        line_count,
-        line_info.join("\t"),
-    )
-}
+//     format!(
+//         "<span id=\"{}\">{}</span><br>\n",
+//         line_count,
+//         line_info.join("\t"),
+//     )
+// }
 
 trait GenerateDate {
     fn generate_date(date_string: &str) -> NaiveDate;
@@ -154,5 +192,27 @@ impl ZeroPadString for NaiveDate {
         let day = zero_padding(&self.day().to_string(), 2);
 
         YmdString(year, month, day)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    fn read() -> String {
+        fs::read_to_string("./history.txt").unwrap()
+    }
+
+    #[test]
+    /// cargo test -- --nocapture
+    fn search_test() {
+        let data = read();
+        let history = LineHistory::new(&data);
+        let result = history.search_by_keyword("hello");
+        assert_eq!(result.len(), 40);
+        for elem in result {
+            println!("{}: {}", elem.date, elem.line_count);
+        }
     }
 }
