@@ -91,9 +91,9 @@ impl LineHistory {
 
         for (i, line) in self.history_data.iter().enumerate() {
             if re_date.is_match(line) {
-                let date_tmp = NaiveDate::generate_date(&line[0..10]);
+                let date_tmp = generate_date(&line[0..10]);
                 if date_tmp >= date {
-                    date = NaiveDate::generate_date(&line[0..10]);
+                    date = generate_date(&line[0..10]);
                     count_start = i;
                 }
             } else if re_keyword.find(line).is_some() {
@@ -129,7 +129,7 @@ fn calc_date_indices(history_data: &[String]) -> HashMap<NaiveDate, usize> {
         if !re_date.is_match(line) {
             continue;
         }
-        let date_tmp = NaiveDate::generate_date(&line[0..10]);
+        let date_tmp = generate_date(&line[0..10]);
         if date_tmp >= current {
             current = date_tmp;
             result.insert(current, i);
@@ -159,18 +159,13 @@ fn calc_date_indices(history_data: &[String]) -> HashMap<NaiveDate, usize> {
 //     )
 // }
 
-trait GenerateDate {
-    fn generate_date(date_string: &str) -> NaiveDate;
-}
 
-impl GenerateDate for NaiveDate {
-    fn generate_date(date_string: &str) -> NaiveDate {
-        let parse_result = NaiveDate::parse_from_str(date_string, YMD_PATTERN);
+fn generate_date(date_string: &str) -> NaiveDate {
+    let parse_result = NaiveDate::parse_from_str(date_string, YMD_PATTERN);
 
-        match parse_result {
-            Ok(date) => date,
-            Err(_) => NaiveDate::default(),
-        }
+    match parse_result {
+        Ok(date) => date,
+        Err(_) => NaiveDate::default(),
     }
 }
 
