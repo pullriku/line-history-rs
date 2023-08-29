@@ -12,5 +12,5 @@ fn main() {
     let result = history.search_by_date(
         &NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
     );
-    println!("{}", result);
+    println!("{}", result.unwrap());
 }

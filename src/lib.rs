@@ -49,15 +49,11 @@ impl LineHistory {
         }
     }
 
-    pub fn search_by_date(&self, date: &NaiveDate) -> String {
+    pub fn search_by_date(&self, date: &NaiveDate) -> Option<String> {
         let date_input = date;
         let mut result = String::new();
 
-        let start_line_num = self.date_indices.get(date_input);
-        if start_line_num.is_none() {
-            return String::from("この日の履歴はありません。<br>");
-        }
-        let start_line_num = start_line_num.unwrap().to_owned();
+        let start_line_num = self.date_indices.get(date_input)?.to_owned();
 
         let default_date = NaiveDate::default();
         let next_index = self.date_array.get(
@@ -78,7 +74,7 @@ impl LineHistory {
             &format!("{}行\n", next_line_num - start_line_num)
         );
 
-        result
+        Option::from(result)
     }
 
     pub fn search_by_keyword(&self, keyword: &str) -> Vec<LineId> {
@@ -120,7 +116,7 @@ impl LineHistory {
 
         let date = self.date_array[random_index];
 
-        self.search_by_date(&date)
+        self.search_by_date(&date).unwrap()
     }
 }
 
@@ -217,6 +213,15 @@ mod tests {
 
     fn read() -> String {
         fs::read_to_string("./history.txt").unwrap()
+    }
+
+    #[test]
+    fn search_by_date_test() {
+        let history = init();
+        let result = history.search_by_date(
+            &NaiveDate::from_ymd_opt(2222, 1, 1).unwrap(),
+        );
+        assert!(result.is_none());
     }
 
     #[test]
