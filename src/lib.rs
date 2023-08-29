@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use chrono::{self, NaiveDate, Datelike};
+use rand::Rng;
 use regex::Regex;
 
 const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
@@ -48,11 +49,11 @@ impl LineHistory {
         }
     }
 
-    pub fn search_by_date(&self, date_string: &str) -> String {
-        let date_input = NaiveDate::generate_date(date_string);
+    pub fn search_by_date(&self, date: &NaiveDate) -> String {
+        let date_input = date;
         let mut result = String::new();
 
-        let start_line_num = self.date_indices.get(&date_input);
+        let start_line_num = self.date_indices.get(date_input);
         if start_line_num.is_none() {
             return String::from("この日の履歴はありません。<br>");
         }
@@ -61,7 +62,7 @@ impl LineHistory {
         let default_date = NaiveDate::default();
         let next_index = self.date_array.get(
             self.date_array
-                .binary_search(&date_input).unwrap() + 1
+                .binary_search(date_input).unwrap() + 1
         ).unwrap_or(&default_date);
 
         let default_index = self.history_data.len();
@@ -111,6 +112,15 @@ impl LineHistory {
         }
 
         result
+    }
+
+    pub fn search_by_random(&self) -> String {
+        let mut random = rand::thread_rng();
+        let random_index = random.gen_range(0..self.date_array.len());
+
+        let date = self.date_array[random_index];
+
+        self.search_by_date(&date)
     }
 }
 
@@ -196,23 +206,30 @@ impl ZeroPadString for NaiveDate {
 }
 
 #[cfg(test)]
+/// cargo test -- --nocapture
 mod tests {
     use super::*;
     use std::fs;
+
+    fn init() -> LineHistory {
+        LineHistory::new(&read())
+    }
 
     fn read() -> String {
         fs::read_to_string("./history.txt").unwrap()
     }
 
     #[test]
-    /// cargo test -- --nocapture
     fn search_test() {
-        let data = read();
-        let history = LineHistory::new(&data);
+        let history = init();
         let result = history.search_by_keyword("hello");
         assert_eq!(result.len(), 40);
-        for elem in result {
-            println!("{}: {}", elem.date, elem.line_count);
-        }
+    }
+
+    #[test]
+    fn random_test() {
+        let history = init();
+        let result = history.search_by_random();
+        assert!(!result.is_empty());
     }
 }

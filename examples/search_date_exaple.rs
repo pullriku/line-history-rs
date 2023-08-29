@@ -1,3 +1,4 @@
+use chrono::NaiveDate;
 use line_history::LineHistory;
 use std::fs;
 
@@ -8,6 +9,8 @@ fn read() -> String {
 fn main() {
     let content = read();
     let history = LineHistory::new(&content);
-    let result = history.search_by_date("2022/1/1");
+    let result = history.search_by_date(
+        &NaiveDate::from_ymd_opt(2022, 1, 1).unwrap(),
+    );
     println!("{}", result);
 }
