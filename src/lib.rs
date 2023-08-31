@@ -33,27 +33,15 @@ impl LineHistory {
         let _data = data
             .replace('\r', "")
             .split('\n')
-            .map(|s| s.to_string())
+            .map(String::from)
             .collect::<Vec<String>>();
 
-        let _indices = calc_date_indices(&_data);
-
-        let mut _date_array = _indices.keys().cloned().collect::<Vec<NaiveDate>>();
-        _date_array.sort();
+        let (_indices, _date_array) = calc_date_indices(&_data);
 
         LineHistory {
             history_data: _data,
             date_indices: _indices,
             date_array: _date_array,
-        }
-    }
-
-    pub fn get_line_content(&self, line_count: usize) -> Option<String> {
-        let line = self.history_data.get(line_count)?;
-        if re_time().is_match(line) {
-            Option::from(line[6..].to_string())
-        } else {
-            Option::from(line.to_string())
         }
     }
 
@@ -135,8 +123,9 @@ impl LineHistory {
     }
 }
 
-fn calc_date_indices(history_data: &[String]) -> HashMap<NaiveDate, usize> {
+fn calc_date_indices(history_data: &[String]) ->( HashMap<NaiveDate, usize>, Vec<NaiveDate>) {
     let mut result = HashMap::<NaiveDate, usize>::new();
+    let mut date_array = Vec::<NaiveDate>::new();
     let mut current = NaiveDate::default();
     let re_date = re_date();
     
@@ -147,11 +136,13 @@ fn calc_date_indices(history_data: &[String]) -> HashMap<NaiveDate, usize> {
         let date_tmp = generate_date(&line[0..10]);
         if date_tmp >= current {
             current = date_tmp;
+
             result.insert(current, i);
+            date_array.push(current);
         }
     }
 
-    result
+    (result, date_array)
 }
 
 // fn create_line_with_time(line: &str, line_count: usize, date: &NaiveDate) -> String {

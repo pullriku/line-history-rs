@@ -8,8 +8,6 @@ fn read() -> String {
 fn main() {
     let content = read();
     let history = LineHistory::new(&content);
-    let result = history.search_by_keyword("a");
-    for elem in result {
-        println!("{}", elem.line);
-    }
+    let result = history.search_by_random();
+    println!("{}", result);
 }
