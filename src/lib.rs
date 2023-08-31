@@ -18,7 +18,7 @@ fn re_time() -> Regex {
 
 pub struct LineHistory {
     pub history_data: Vec<String>,
-    pub date_indices: HashMap<NaiveDate, usize>,
+    pub date_indices: HashMap<String, usize>,
     pub date_array: Vec<NaiveDate>,
 }
 
@@ -49,16 +49,16 @@ impl LineHistory {
         let date_input = date;
         let mut result = String::new();
 
-        let start_line_num = self.date_indices.get(date_input)?.to_owned();
+        let start_line_num = self.date_indices.get(&date_input.format(YMD_PATTERN).to_string())?.to_owned();
 
         let default_date = NaiveDate::default();
-        let next_index = self.date_array.get(
+        let next_date = self.date_array.get(
             self.date_array
                 .binary_search(date_input).unwrap() + 1
         ).unwrap_or(&default_date);
 
         let default_index = self.history_data.len();
-        let next_line_num = self.date_indices.get(next_index).unwrap_or(&default_index).to_owned();
+        let next_line_num = self.date_indices.get(&next_date.format(YMD_PATTERN).to_string()).unwrap_or(&default_index).to_owned();
 
         for (_i, line) in self.history_data[start_line_num..next_line_num].iter().enumerate() {
             // result.push_str(&create_line_with_time(line, i, &date_input));
@@ -123,10 +123,12 @@ impl LineHistory {
     }
 }
 
-fn calc_date_indices(history_data: &[String]) ->( HashMap<NaiveDate, usize>, Vec<NaiveDate>) {
-    let mut result = HashMap::<NaiveDate, usize>::new();
+fn calc_date_indices(history_data: &[String]) ->( HashMap<String, usize>, Vec<NaiveDate>) {
+    let mut result = HashMap::<String, usize>::new();
     let mut date_array = Vec::<NaiveDate>::new();
+
     let mut current = NaiveDate::default();
+
     let re_date = re_date();
     
     for (i, line) in history_data.iter().enumerate() {
@@ -137,7 +139,7 @@ fn calc_date_indices(history_data: &[String]) ->( HashMap<NaiveDate, usize>, Vec
         if date_tmp >= current {
             current = date_tmp;
 
-            result.insert(current, i);
+            result.insert(current.format(YMD_PATTERN).to_string(), i);
             date_array.push(current);
         }
     }
