@@ -22,17 +22,16 @@ pub struct LineHistory {
     pub date_array: Vec<NaiveDate>,
 }
 
-pub struct LineId {
+pub struct LineContent {
     pub date: NaiveDate,
     pub line_count: usize,
+    pub line: String,
 }
 
 impl LineHistory {
     pub fn new(data: &str) -> Self {
         let _data = data
             .replace('\r', "")
-            .replace('<', "&lt;")
-            .replace('>', "&gt;")
             .split('\n')
             .map(|s| s.to_string())
             .collect::<Vec<String>>();
@@ -86,31 +85,37 @@ impl LineHistory {
         Option::from(result)
     }
 
-    pub fn search_by_keyword(&self, keyword: &str) -> Vec<LineId> {
+    pub fn search_by_keyword(&self, keyword: &str) -> Vec<LineContent> {
         let _keyword = &keyword
             .replace('<', "&lt;")
             .replace('>', "&gt;");
         let re_keyword = Regex::new(_keyword).unwrap();
 
-        let mut result = Vec::<LineId>::new();
+        let mut result = Vec::<LineContent>::new();
         let mut date = NaiveDate::default();
         let mut count_start: usize = 0;
 
         let re_date = re_date();
 
-        for (i, line) in self.history_data.iter().enumerate() {
-            if re_date.is_match(line) {
+        for (i, _line) in self.history_data.iter().enumerate() {
+            let mut line = _line.to_owned();
+
+            if re_date.is_match(&line) {
                 let date_tmp = generate_date(&line[0..10]);
                 if date_tmp >= date {
                     date = generate_date(&line[0..10]);
                     count_start = i;
                 }
-            } else if re_keyword.find(line).is_some() {
+            } else if re_keyword.find(&line).is_some() {
+                if re_time().is_match(&line) {
+                    line =  line[6..].to_owned();
+                }
                 let line_count = i - count_start;
 
-                let data = LineId {
+                let data = LineContent {
                     date,
                     line_count,
+                    line,
                 };
                 result.push(data);
             }
