@@ -8,18 +8,14 @@ const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
 const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 const YMD_PATTERN: &str = r"%Y/%m/%d";
 
-fn re_date() -> Regex {
-    Regex::new(RE_DATE_S).unwrap()
-}
-
-fn re_time() -> Regex {
-    Regex::new(RE_TIME_S).unwrap()
-}
 
 pub struct LineHistory {
-    pub history_data: Vec<String>,
-    pub date_indices: HashMap<String, usize>,
-    pub date_array: Vec<NaiveDate>,
+    history_data: Vec<String>,
+    date_indices: HashMap<String, usize>,
+    date_array: Vec<NaiveDate>,
+
+    re_date: Regex,
+    re_time: Regex,
 }
 
 pub struct LineContent {
@@ -36,12 +32,16 @@ impl LineHistory {
             .map(String::from)
             .collect::<Vec<String>>();
 
-        let (_indices, _date_array) = calc_date_indices(&_data);
+        let _re_date = Regex::new(RE_DATE_S).unwrap();
+
+        let (_indices, _date_array) = calc_date_indices(&_data, &_re_date);
 
         LineHistory {
             history_data: _data,
             date_indices: _indices,
             date_array: _date_array,
+            re_date: _re_date,
+            re_time: Regex::new(RE_TIME_S).unwrap(),
         }
     }
 
@@ -83,20 +83,17 @@ impl LineHistory {
         let mut date = NaiveDate::default();
         let mut count_start: usize = 0;
 
-        let re_date = re_date();
-        let re_time = re_time();
-
         for (i, _line) in self.history_data.iter().enumerate() {
             let mut line = _line.to_owned();
 
-            if re_date.is_match(&line) {
+            if self.re_date.is_match(&line) {
                 let date_tmp = generate_date(&line[0..10]);
                 if date_tmp >= date {
                     date = generate_date(&line[0..10]);
                     count_start = i;
                 }
             } else if re_keyword.find(&line).is_some() {
-                if re_time.is_match(&line) {
+                if self.re_time.is_match(&line) {
                     line =  line[6..].to_owned();
                 }
                 let line_count = i - count_start;
@@ -123,13 +120,12 @@ impl LineHistory {
     }
 }
 
-fn calc_date_indices(history_data: &[String]) ->( HashMap<String, usize>, Vec<NaiveDate>) {
-    let mut result = HashMap::<String, usize>::new();
-    let mut date_array = Vec::<NaiveDate>::new();
+fn calc_date_indices(history_data: &[String], re_date: &Regex) ->( HashMap<String, usize>, Vec<NaiveDate>) {
+    let init_capacity = history_data.len()/1000usize;
+    let mut result = HashMap::<String, usize>::with_capacity(init_capacity);
+    let mut date_array = Vec::<NaiveDate>::with_capacity(init_capacity);
 
     let mut current = NaiveDate::default();
-
-    let re_date = re_date();
     
     for (i, line) in history_data.iter().enumerate() {
         if !re_date.is_match(line) {
