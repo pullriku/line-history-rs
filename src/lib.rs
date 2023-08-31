@@ -96,6 +96,7 @@ impl LineHistory {
         let mut count_start: usize = 0;
 
         let re_date = re_date();
+        let re_time = re_time();
 
         for (i, _line) in self.history_data.iter().enumerate() {
             let mut line = _line.to_owned();
@@ -107,7 +108,7 @@ impl LineHistory {
                     count_start = i;
                 }
             } else if re_keyword.find(&line).is_some() {
-                if re_time().is_match(&line) {
+                if re_time.is_match(&line) {
                     line =  line[6..].to_owned();
                 }
                 let line_count = i - count_start;
