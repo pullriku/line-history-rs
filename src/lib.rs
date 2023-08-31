@@ -5,16 +5,16 @@ use rand::Rng;
 use regex::Regex;
 
 const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
-// const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
+const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 const YMD_PATTERN: &str = r"%Y/%m/%d";
 
 fn re_date() -> Regex {
     Regex::new(RE_DATE_S).unwrap()
 }
 
-// fn re_time() -> Regex {
-//     Regex::new(RE_TIME_S).unwrap()
-// }
+fn re_time() -> Regex {
+    Regex::new(RE_TIME_S).unwrap()
+}
 
 pub struct LineHistory {
     pub history_data: Vec<String>,
@@ -46,6 +46,15 @@ impl LineHistory {
             history_data: _data,
             date_indices: _indices,
             date_array: _date_array,
+        }
+    }
+
+    pub fn get_line_content(&self, line_count: usize) -> Option<String> {
+        let line = self.history_data.get(line_count)?;
+        if re_time().is_match(line) {
+            Option::from(line[6..].to_string())
+        } else {
+            Option::from(line.to_string())
         }
     }
 
