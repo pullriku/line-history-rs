@@ -27,9 +27,8 @@ pub struct LineContent {
 impl LineHistory {
     pub fn new(data: &str) -> Self {
         let _data = data
-            .replace('\r', "")
-            .split('\n')
-            .map(String::from)
+            .lines()
+            .map(|line| line.to_owned())
             .collect::<Vec<String>>();
 
         let _re_date = Regex::new(RE_DATE_S).unwrap();
@@ -89,7 +88,7 @@ impl LineHistory {
             if self.re_date.is_match(&line) {
                 let date_tmp = generate_date(&line[0..10]);
                 if date_tmp >= date {
-                    date = generate_date(&line[0..10]);
+                    date = date_tmp;
                     count_start = i;
                 }
             } else if re_keyword.find(&line).is_some() {
@@ -124,6 +123,8 @@ fn calc_date_indices(history_data: &[String], re_date: &Regex) ->( HashMap<Strin
     let init_capacity = history_data.len()/1000usize;
     let mut result = HashMap::<String, usize>::with_capacity(init_capacity);
     let mut date_array = Vec::<NaiveDate>::with_capacity(init_capacity);
+    // let mut result = HashMap::<String, usize>::new();
+    // let mut date_array = Vec::<NaiveDate>::new();
 
     let mut current = NaiveDate::default();
     
@@ -165,12 +166,23 @@ fn calc_date_indices(history_data: &[String], re_date: &Regex) ->( HashMap<Strin
 
 
 fn generate_date(date_string: &str) -> NaiveDate {
-    let parse_result = NaiveDate::parse_from_str(date_string, YMD_PATTERN);
+    let ymd = date_string
+        .split('/')
+        .map(
+        |elem| elem.parse::<u16>().unwrap_or_default()
+        )
+        .collect::<Vec<u16>>();
 
-    match parse_result {
-        Ok(date) => date,
-        Err(_) => NaiveDate::default(),
+    if ymd.len() != 3 {
+        return NaiveDate::default();
     }
+
+    let parse_result = NaiveDate::from_ymd_opt(
+        ymd[0] as i32, ymd[1] as u32, ymd[2] as u32
+    );
+    // let parse_result = NaiveDate::parse_from_str(date_string, YMD_PATTERN);
+    // println!("{:?}", parse_result);
+    parse_result.unwrap_or_default()
 }
 
 pub fn zero_padding(string: &str, length: usize) -> String {
