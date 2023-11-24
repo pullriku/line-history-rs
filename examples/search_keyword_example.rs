@@ -10,6 +10,6 @@ fn main() {
     let history = LineHistory::new(&content);
     let result = history.search_by_keyword("a");
     for elem in result {
-        println!("{}", elem.line);
+        println!("{}", elem);
     }
 }

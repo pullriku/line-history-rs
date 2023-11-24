@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use chrono::{self, NaiveDate, Datelike};
 use rand::Rng;
@@ -8,9 +8,9 @@ const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
 const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 const YMD_PATTERN: &str = r"%Y/%m/%d";
 
-pub struct LineHistory {
-    history_data: Vec<String>,
-    date_indices: HashMap<String, usize>,
+pub struct LineHistory<'a> {
+    history_data: Vec<&'a str>,
+    date_indices: HashMap<&'a str, usize>,
     date_array: Vec<NaiveDate>,
 
     re_date: Regex,
@@ -23,10 +23,17 @@ pub struct LineContent {
     pub line: String,
 }
 
-impl LineHistory {
+impl Display for LineContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let date = self.date.with_zero_padding();
+        write!(f, "{}/{}/{} {}", date.0, date.1, date.2, self.line)
+    }
+}
 
-    pub fn from_lines(lines: Vec<String>) -> Self {
-        let _data = lines;
+impl<'a> LineHistory<'a> {
+
+    pub fn from_lines(lines: &[&'a str]) -> Self {
+        let _data = lines.to_vec();
 
         let _re_date = Regex::new(RE_DATE_S).unwrap();
 
@@ -36,15 +43,14 @@ impl LineHistory {
             history_data: _data,
             date_indices: _indices,
             date_array: _date_array,
-            re_date: _re_date,
+            re_date: Regex::new(RE_DATE_S).unwrap(),
             re_time: Regex::new(RE_TIME_S).unwrap(),
         }
     }
 
-    pub fn new(data: &str) -> Self {
+    pub fn new(data: &'a str) -> Self {
         let _data = data
             .lines()
-            .map(|line| line.to_owned())
             .collect::<Vec<_>>();
 
         let _re_date = Regex::new(RE_DATE_S).unwrap();
@@ -64,7 +70,7 @@ impl LineHistory {
         let date_input = date;
         let mut result = String::new();
 
-        let start_line_num = self.date_indices.get(&date_input.format(YMD_PATTERN).to_string())?.to_owned();
+        let start_line_num = self.date_indices.get(date_input.format(YMD_PATTERN).to_string().as_str())?.to_owned();
 
         let default_date = NaiveDate::default();
         let next_date = self.date_array.get(
@@ -73,7 +79,7 @@ impl LineHistory {
         ).unwrap_or(&default_date);
 
         let default_index = self.history_data.len();
-        let next_line_num = self.date_indices.get(&next_date.format(YMD_PATTERN).to_string()).unwrap_or(&default_index).to_owned();
+        let next_line_num = self.date_indices.get(next_date.format(YMD_PATTERN).to_string().as_str()).unwrap_or(&default_index).to_owned();
 
         for (_i, line) in self.history_data[start_line_num..next_line_num].iter().enumerate() {
             // result.push_str(&create_line_with_time(line, i, &date_input));
@@ -109,7 +115,7 @@ impl LineHistory {
                 }
             } else if re_keyword.find(&line).is_some() {
                 if self.re_time.is_match(&line) {
-                    line =  line[6..].to_string();
+                    line =  &line[6..];
                 }
                 let line_count = i - count_start;
 
@@ -135,9 +141,9 @@ impl LineHistory {
     }
 }
 
-fn calc_date_indices(history_data: &[String], re_date: &Regex) ->( HashMap<String, usize>, Vec<NaiveDate>) {
+fn calc_date_indices<'a>(history_data: &[&'a str], re_date: &Regex) -> (HashMap<&'a str, usize>, Vec<NaiveDate>) {
     let init_capacity = history_data.len()/1000usize;
-    let mut result = HashMap::<String, usize>::with_capacity(init_capacity);
+    let mut result = HashMap::<&str, usize>::with_capacity(init_capacity);
     let mut date_array = Vec::<NaiveDate>::with_capacity(init_capacity);
     // let mut result = HashMap::<String, usize>::new();
     // let mut date_array = Vec::<NaiveDate>::new();
@@ -152,7 +158,7 @@ fn calc_date_indices(history_data: &[String], re_date: &Regex) ->( HashMap<Strin
         if date_tmp >= current {
             current = date_tmp;
 
-            result.insert(current.format(YMD_PATTERN).to_string(), i);
+            result.insert(&line[0..10], i);
             date_array.push(current);
         }
     }
