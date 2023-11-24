@@ -8,7 +8,6 @@ const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
 const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 const YMD_PATTERN: &str = r"%Y/%m/%d";
 
-
 pub struct LineHistory {
     history_data: Vec<String>,
     date_indices: HashMap<String, usize>,
@@ -25,11 +24,28 @@ pub struct LineContent {
 }
 
 impl LineHistory {
+
+    pub fn from_lines(lines: Vec<String>) -> Self {
+        let _data = lines;
+
+        let _re_date = Regex::new(RE_DATE_S).unwrap();
+
+        let (_indices, _date_array) = calc_date_indices(&_data, &_re_date);
+
+        LineHistory {
+            history_data: _data,
+            date_indices: _indices,
+            date_array: _date_array,
+            re_date: _re_date,
+            re_time: Regex::new(RE_TIME_S).unwrap(),
+        }
+    }
+
     pub fn new(data: &str) -> Self {
         let _data = data
             .lines()
             .map(|line| line.to_owned())
-            .collect::<Vec<String>>();
+            .collect::<Vec<_>>();
 
         let _re_date = Regex::new(RE_DATE_S).unwrap();
 
@@ -93,14 +109,14 @@ impl LineHistory {
                 }
             } else if re_keyword.find(&line).is_some() {
                 if self.re_time.is_match(&line) {
-                    line =  line[6..].to_owned();
+                    line =  line[6..].to_string();
                 }
                 let line_count = i - count_start;
 
                 let data = LineContent {
                     date,
                     line_count,
-                    line,
+                    line: line.to_owned(),
                 };
                 result.push(data);
             }
@@ -144,27 +160,6 @@ fn calc_date_indices(history_data: &[String], re_date: &Regex) ->( HashMap<Strin
     (result, date_array)
 }
 
-// fn create_line_with_time(line: &str, line_count: usize, date: &NaiveDate) -> String {
-//     let mut line_info: Vec<&str> = line.split('\t').collect();
-//     let new_info: String;
-//     if line_info.len() >= 2 {
-//         new_info = format!(
-//             "<a href=\"javascript:showLineInfoAlert(\'{}\',{});\">{}</a>", 
-//             date.format(YMD_PATTERN), 
-//             line_count,
-//             line_info[0]
-//         );
-//         line_info[0] = &new_info;
-//     }
-
-//     format!(
-//         "<span id=\"{}\">{}</span><br>\n",
-//         line_count,
-//         line_info.join("\t"),
-//     )
-// }
-
-
 fn generate_date(date_string: &str) -> NaiveDate {
     let ymd = date_string
         .split('/')
@@ -180,8 +175,7 @@ fn generate_date(date_string: &str) -> NaiveDate {
     let parse_result = NaiveDate::from_ymd_opt(
         ymd[0] as i32, ymd[1] as u32, ymd[2] as u32
     );
-    // let parse_result = NaiveDate::parse_from_str(date_string, YMD_PATTERN);
-    // println!("{:?}", parse_result);
+
     parse_result.unwrap_or_default()
 }
 
@@ -218,17 +212,14 @@ mod tests {
     use super::*;
     use std::fs;
 
-    fn init() -> LineHistory {
-        LineHistory::new(&read())
-    }
-
     fn read() -> String {
         fs::read_to_string("./history.txt").unwrap()
     }
 
     #[test]
     fn search_by_date_test() {
-        let history = init();
+        let text = read();
+        let history = LineHistory::new(&text);
         let result = history.search_by_date(
             &NaiveDate::from_ymd_opt(2222, 1, 1).unwrap(),
         );
@@ -237,14 +228,16 @@ mod tests {
 
     #[test]
     fn search_test() {
-        let history = init();
+        let text = read();
+        let history = LineHistory::new(&text);
         let result = history.search_by_keyword("hello");
         assert_eq!(result.len(), 40);
     }
 
     #[test]
     fn random_test() {
-        let history = init();
+        let text = read();
+        let history = LineHistory::new(&text);
         let result = history.search_by_random();
         assert!(!result.is_empty());
     }
