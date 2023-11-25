@@ -8,9 +8,9 @@ const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
 const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 const YMD_PATTERN: &str = r"%Y/%m/%d";
 
-pub struct LineHistory<'a> {
-    history_data: Vec<&'a str>,
-    date_indices: HashMap<&'a str, usize>,
+pub struct LineHistory {
+    history_data: Vec<String>,
+    date_indices: HashMap<String, usize>,
     date_array: Vec<NaiveDate>,
 
     re_date: Regex,
@@ -30,9 +30,9 @@ impl Display for LineContent {
     }
 }
 
-impl<'a> LineHistory<'a> {
+impl LineHistory {
 
-    pub fn from_lines(lines: &[&'a str]) -> Self {
+    pub fn from_lines(lines: &[String]) -> Self {
         let _data = lines.to_vec();
 
         let _re_date = Regex::new(RE_DATE_S).unwrap();
@@ -48,9 +48,10 @@ impl<'a> LineHistory<'a> {
         }
     }
 
-    pub fn new(data: &'a str) -> Self {
+    pub fn new(data: String) -> Self {
         let _data = data
             .lines()
+            .map(|line| line.to_owned())
             .collect::<Vec<_>>();
 
         let _re_date = Regex::new(RE_DATE_S).unwrap();
@@ -115,7 +116,7 @@ impl<'a> LineHistory<'a> {
                 }
             } else if re_keyword.find(&line).is_some() {
                 if self.re_time.is_match(&line) {
-                    line =  &line[6..];
+                    line =  line[6..].to_owned();
                 }
                 let line_count = i - count_start;
 
@@ -141,9 +142,9 @@ impl<'a> LineHistory<'a> {
     }
 }
 
-fn calc_date_indices<'a>(history_data: &[&'a str], re_date: &Regex) -> (HashMap<&'a str, usize>, Vec<NaiveDate>) {
+fn calc_date_indices(history_data: &[String], re_date: &Regex) -> (HashMap<String, usize>, Vec<NaiveDate>) {
     let init_capacity = history_data.len()/1000usize;
-    let mut result = HashMap::<&str, usize>::with_capacity(init_capacity);
+    let mut result = HashMap::<String, usize>::with_capacity(init_capacity);
     let mut date_array = Vec::<NaiveDate>::with_capacity(init_capacity);
     // let mut result = HashMap::<String, usize>::new();
     // let mut date_array = Vec::<NaiveDate>::new();
@@ -158,7 +159,7 @@ fn calc_date_indices<'a>(history_data: &[&'a str], re_date: &Regex) -> (HashMap<
         if date_tmp >= current {
             current = date_tmp;
 
-            result.insert(&line[0..10], i);
+            result.insert(line[0..10].to_owned(), i);
             date_array.push(current);
         }
     }
@@ -225,7 +226,7 @@ mod tests {
     #[test]
     fn search_by_date_test() {
         let text = read();
-        let history = LineHistory::new(&text);
+        let history = LineHistory::new(text);
         let result = history.search_by_date(
             &NaiveDate::from_ymd_opt(2222, 1, 1).unwrap(),
         );
@@ -235,7 +236,7 @@ mod tests {
     #[test]
     fn search_test() {
         let text = read();
-        let history = LineHistory::new(&text);
+        let history = LineHistory::new(text);
         let result = history.search_by_keyword("hello");
         assert_eq!(result.len(), 40);
     }
@@ -243,7 +244,7 @@ mod tests {
     #[test]
     fn random_test() {
         let text = read();
-        let history = LineHistory::new(&text);
+        let history = LineHistory::new(text);
         let result = history.search_by_random();
         assert!(!result.is_empty());
     }

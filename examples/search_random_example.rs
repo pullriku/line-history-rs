@@ -7,7 +7,7 @@ fn read() -> String {
 
 fn main() {
     let content = read();
-    let history = LineHistory::new(&content);
+    let history = LineHistory::new(content);
     let result = history.search_by_random();
     println!("{}", result);
 }
