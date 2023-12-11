@@ -1,8 +1,7 @@
-use std::{collections::HashMap, fmt::Display};
-
-use chrono::{self, NaiveDate, Datelike};
+use chrono::{self, Datelike, NaiveDate};
 use rand::Rng;
 use regex::Regex;
+use std::{collections::HashMap, fmt::Display, fs};
 
 const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
 const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
@@ -31,7 +30,13 @@ impl Display for LineContent {
 }
 
 impl LineHistory {
+    /// Read text file and create LineHistory structure.
+    pub fn read_from_file(path: &str) -> Result<Self, std::io::Error> {
+        let data = fs::read_to_string(path)?;
+        Ok(Self::new(data))
+    }
 
+    /// Create LineHistory structure from lines.
     pub fn from_lines(lines: &[String]) -> Self {
         let _data = lines.to_vec();
 
@@ -49,10 +54,7 @@ impl LineHistory {
     }
 
     pub fn new(data: String) -> Self {
-        let _data = data
-            .lines()
-            .map(|line| line.to_owned())
-            .collect::<Vec<_>>();
+        let _data = data.lines().map(|line| line.to_owned()).collect::<Vec<_>>();
 
         let _re_date = Regex::new(RE_DATE_S).unwrap();
 
@@ -67,39 +69,54 @@ impl LineHistory {
         }
     }
 
+    pub fn len(&self) -> usize {
+        self.history_data.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.history_data.is_empty()
+    }
+
     pub fn search_by_date(&self, date: &NaiveDate) -> Option<String> {
         let date_input = date;
         let mut result = String::new();
 
-        let start_line_num = self.date_indices.get(date_input.format(YMD_PATTERN).to_string().as_str())?.to_owned();
+        let start_line_num = self
+            .date_indices
+            .get(date_input.format(YMD_PATTERN).to_string().as_str())?
+            .to_owned();
 
         let default_date = NaiveDate::default();
-        let next_date = self.date_array.get(
-            self.date_array
-                .binary_search(date_input).unwrap() + 1
-        ).unwrap_or(&default_date);
+        let next_date = self
+            .date_array
+            .get(self.date_array.binary_search(date_input).unwrap() + 1)
+            .unwrap_or(&default_date);
 
         let default_index = self.history_data.len();
-        let next_line_num = self.date_indices.get(next_date.format(YMD_PATTERN).to_string().as_str()).unwrap_or(&default_index).to_owned();
+        let next_line_num = self
+            .date_indices
+            .get(next_date.format(YMD_PATTERN).to_string().as_str())
+            .unwrap_or(&default_index)
+            .to_owned();
 
-        for (_i, line) in self.history_data[start_line_num..next_line_num].iter().enumerate() {
+        for (_i, line) in self.history_data[start_line_num..next_line_num]
+            .iter()
+            .enumerate()
+        {
             // result.push_str(&create_line_with_time(line, i, &date_input));
             result.push_str(&format!("{}\n", line));
         }
 
         result.push_str(
             // &format!("{}行<br>", next_line_num - start_line_num)
-            &format!("{}行\n", next_line_num - start_line_num)
+            &format!("{}行\n", next_line_num - start_line_num),
         );
 
         Option::from(result)
     }
 
     pub fn search_by_keyword(&self, keyword: &str) -> Vec<LineContent> {
-        let _keyword = &keyword
-            .replace('<', "&lt;")
-            .replace('>', "&gt;");
-        let re_keyword = Regex::new(_keyword).unwrap();
+        let re_keyword = Regex::new(keyword).unwrap();
 
         let mut result = Vec::<LineContent>::new();
         let mut date = NaiveDate::default();
@@ -116,7 +133,7 @@ impl LineHistory {
                 }
             } else if re_keyword.find(&line).is_some() {
                 if self.re_time.is_match(&line) {
-                    line =  line[6..].to_owned();
+                    line = line[6..].to_owned();
                 }
                 let line_count = i - count_start;
 
@@ -142,15 +159,18 @@ impl LineHistory {
     }
 }
 
-fn calc_date_indices(history_data: &[String], re_date: &Regex) -> (HashMap<String, usize>, Vec<NaiveDate>) {
-    let init_capacity = history_data.len()/1000usize;
+fn calc_date_indices(
+    history_data: &[String],
+    re_date: &Regex,
+) -> (HashMap<String, usize>, Vec<NaiveDate>) {
+    let init_capacity = history_data.len() / 1000usize;
     let mut result = HashMap::<String, usize>::with_capacity(init_capacity);
     let mut date_array = Vec::<NaiveDate>::with_capacity(init_capacity);
     // let mut result = HashMap::<String, usize>::new();
     // let mut date_array = Vec::<NaiveDate>::new();
 
     let mut current = NaiveDate::default();
-    
+
     for (i, line) in history_data.iter().enumerate() {
         if !re_date.is_match(line) {
             continue;
@@ -170,18 +190,14 @@ fn calc_date_indices(history_data: &[String], re_date: &Regex) -> (HashMap<Strin
 fn generate_date(date_string: &str) -> NaiveDate {
     let ymd = date_string
         .split('/')
-        .map(
-        |elem| elem.parse::<u16>().unwrap_or_default()
-        )
+        .map(|elem| elem.parse::<u16>().unwrap_or_default())
         .collect::<Vec<u16>>();
 
     if ymd.len() != 3 {
         return NaiveDate::default();
     }
 
-    let parse_result = NaiveDate::from_ymd_opt(
-        ymd[0] as i32, ymd[1] as u32, ymd[2] as u32
-    );
+    let parse_result = NaiveDate::from_ymd_opt(ymd[0] as i32, ymd[1] as u32, ymd[2] as u32);
 
     parse_result.unwrap_or_default()
 }
@@ -201,7 +217,6 @@ pub struct YmdString(String, String, String);
 trait ZeroPadString {
     fn with_zero_padding(&self) -> YmdString;
 }
-    
 
 impl ZeroPadString for NaiveDate {
     fn with_zero_padding(&self) -> YmdString {
@@ -227,9 +242,7 @@ mod tests {
     fn search_by_date_test() {
         let text = read();
         let history = LineHistory::new(text);
-        let result = history.search_by_date(
-            &NaiveDate::from_ymd_opt(2222, 1, 1).unwrap(),
-        );
+        let result = history.search_by_date(&NaiveDate::from_ymd_opt(2222, 1, 1).unwrap());
         assert!(result.is_none());
     }
 
