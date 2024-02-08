@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use chrono::{self, Datelike, NaiveDate};
 use rand::Rng;
 use regex::Regex;
@@ -30,53 +32,68 @@ impl Display for LineContent {
 }
 
 impl LineHistory {
-    /// Read text file and create LineHistory structure.
+    /// Read text file and create `LineHistory` structure.
+    ///  
+    /// # Errors
+    /// Error if file not found.
     pub fn read_from_file(path: &str) -> Result<Self, std::io::Error> {
         let data = fs::read_to_string(path)?;
-        Ok(Self::new(data))
+        Ok(Self::new(&data))
     }
 
-    /// Create LineHistory structure from lines.
+    /// Create `LineHistory` structure from lines.
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn from_lines(lines: &[String]) -> Self {
-        let _data = lines.to_vec();
+        let data = lines.to_vec();
 
-        let _re_date = Regex::new(RE_DATE_S).unwrap();
+        let re_date = Regex::new(RE_DATE_S).unwrap();
 
-        let (_indices, _date_array) = calc_date_indices(&_data, &_re_date);
+        let (indices, date_array) = calc_date_indices(&data, &re_date);
 
         LineHistory {
-            history_data: _data,
-            date_indices: _indices,
-            date_array: _date_array,
+            history_data: data,
+            date_indices: indices,
+            date_array,
             re_date: Regex::new(RE_DATE_S).unwrap(),
             re_time: Regex::new(RE_TIME_S).unwrap(),
         }
     }
 
-    pub fn new(data: String) -> Self {
-        let _data = data.lines().map(|line| line.to_owned()).collect::<Vec<_>>();
+    /// Create `LineHistory` structure from text.
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
+    pub fn new(data: &str) -> Self {
+        let data = data.lines().map(ToOwned::to_owned).collect::<Vec<_>>();
 
-        let _re_date = Regex::new(RE_DATE_S).unwrap();
+        let re_date = Regex::new(RE_DATE_S).unwrap();
 
-        let (_indices, _date_array) = calc_date_indices(&_data, &_re_date);
+        let (indices, date_array) = calc_date_indices(&data, &re_date);
 
         LineHistory {
-            history_data: _data,
-            date_indices: _indices,
-            date_array: _date_array,
-            re_date: _re_date,
+            history_data: data,
+            date_indices: indices,
+            date_array,
+            re_date,
             re_time: Regex::new(RE_TIME_S).unwrap(),
         }
     }
 
+    #[must_use]
     pub fn len(&self) -> usize {
         self.history_data.len()
     }
 
+    #[must_use]
     pub fn is_empty(&self) -> bool {
         self.history_data.is_empty()
     }
 
+    /// Search history by date.
+    /// 
+    /// # Panics
+    /// Panics if date not found.
+    #[must_use]
     pub fn search_by_date(&self, date: &NaiveDate) -> Option<String> {
         let date_input = date;
         let mut result = String::new();
@@ -99,12 +116,9 @@ impl LineHistory {
             .unwrap_or(&default_index)
             .to_owned();
 
-        for (_i, line) in self.history_data[start_line_num..next_line_num]
-            .iter()
-            .enumerate()
-        {
+        for line in &self.history_data[start_line_num..next_line_num] {
             // result.push_str(&create_line_with_time(line, i, &date_input));
-            result.push_str(&format!("{}\n", line));
+            result.push_str(&format!("{line}\n"));
         }
 
         result.push_str(
@@ -115,6 +129,12 @@ impl LineHistory {
         Option::from(result)
     }
 
+    /// Search history by keyword.
+    ///
+    /// # Panics
+    /// Panics if keyword is not correct regex.
+    /// 
+    #[must_use]
     pub fn search_by_keyword(&self, keyword: &str) -> Vec<LineContent> {
         let re_keyword = Regex::new(keyword).unwrap();
 
@@ -122,8 +142,8 @@ impl LineHistory {
         let mut date = NaiveDate::default();
         let mut count_start: usize = 0;
 
-        for (i, _line) in self.history_data.iter().enumerate() {
-            let mut line = _line.to_owned();
+        for (i, line) in self.history_data.iter().enumerate() {
+            let mut line = line.to_owned();
 
             if self.re_date.is_match(&line) {
                 let date_tmp = generate_date(&line[0..10]);
@@ -137,18 +157,23 @@ impl LineHistory {
                 }
                 let line_count = i - count_start;
 
-                let data = LineContent {
+                let line_content = LineContent {
                     date,
                     line_count,
-                    line: line.to_owned(),
+                    line: line.clone(),
                 };
-                result.push(data);
+                result.push(line_content);
             }
         }
 
         result
     }
 
+    /// Search history by random.
+    /// 
+    /// # Panics
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn search_by_random(&self) -> String {
         let mut random = rand::thread_rng();
         let random_index = random.gen_range(0..self.date_array.len());
@@ -197,11 +222,12 @@ fn generate_date(date_string: &str) -> NaiveDate {
         return NaiveDate::default();
     }
 
-    let parse_result = NaiveDate::from_ymd_opt(ymd[0] as i32, ymd[1] as u32, ymd[2] as u32);
+    let parse_result = NaiveDate::from_ymd_opt(i32::from(ymd[0]), u32::from(ymd[1]), u32::from(ymd[2]));
 
     parse_result.unwrap_or_default()
 }
 
+#[must_use]
 pub fn zero_padding(string: &str, length: usize) -> String {
     let mut result = String::new();
     for _ in 0..(length - string.len()) {
@@ -241,7 +267,7 @@ mod tests {
     #[test]
     fn search_by_date_test() {
         let text = read();
-        let history = LineHistory::new(text);
+        let history = LineHistory::new(&text);
         let result = history.search_by_date(&NaiveDate::from_ymd_opt(2222, 1, 1).unwrap());
         assert!(result.is_none());
     }
@@ -249,7 +275,7 @@ mod tests {
     #[test]
     fn search_test() {
         let text = read();
-        let history = LineHistory::new(text);
+        let history = LineHistory::new(&text);
         let result = history.search_by_keyword("hello");
         assert_eq!(result.len(), 40);
     }
@@ -257,7 +283,7 @@ mod tests {
     #[test]
     fn random_test() {
         let text = read();
-        let history = LineHistory::new(text);
+        let history = LineHistory::new(&text);
         let result = history.search_by_random();
         assert!(!result.is_empty());
     }
