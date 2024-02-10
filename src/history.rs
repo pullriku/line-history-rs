@@ -1,17 +1,17 @@
 use chrono::{self, NaiveDate};
 use rand::Rng;
 use regex::Regex;
-use std::{collections::HashMap, fs};
+use std::{collections::BTreeMap, fs};
 
 use crate::line_content::LineContent;
 
 const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
 const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
-const YMD_PATTERN: &str = r"%Y/%m/%d";
+// const YMD_PATTERN: &str = r"%Y/%m/%d";
 
 pub struct History {
     history_data: Vec<String>,
-    date_indices: HashMap<String, usize>,
+    date_indices: BTreeMap<NaiveDate, usize>,
     date_array: Vec<NaiveDate>,
 
     re_date: Regex,
@@ -24,22 +24,23 @@ impl History {
     /// # Errors
     /// Error if file not found.
     pub fn read_from_file(path: &str) -> Result<Self, std::io::Error> {
-        let data = fs::read_to_string(path)?;
+        let data: String = fs::read_to_string(path)?.split('\n').skip(3).collect();
         Ok(Self::new(&data))
     }
 
     /// Create `LineHistory` structure from lines.
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
-    pub fn from_lines(lines: &[String]) -> Self {
-        let data = lines.to_vec();
-
+    pub fn from_lines(mut lines: Vec<String>) -> Self {
         let re_date = Regex::new(RE_DATE_S).unwrap();
 
-        let (indices, date_array) = calc_date_indices(&data, &re_date);
+        lines = lines.into_iter().skip_while(|line| !re_date.is_match(line)).collect();
+
+
+        let (indices, date_array) = calc_date_indices(&lines, &re_date);
 
         History {
-            history_data: data,
+            history_data: lines,
             date_indices: indices,
             date_array,
             re_date: Regex::new(RE_DATE_S).unwrap(),
@@ -51,9 +52,13 @@ impl History {
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn new(data: &str) -> Self {
-        let data = data.lines().map(ToOwned::to_owned).collect::<Vec<_>>();
-
         let re_date = Regex::new(RE_DATE_S).unwrap();
+
+        let data = data
+            .lines()
+            .skip_while(|line| !re_date.is_match(line))
+            .map(ToOwned::to_owned)
+            .collect::<Vec<String>>();
 
         let (indices, date_array) = calc_date_indices(&data, &re_date);
 
@@ -85,27 +90,15 @@ impl History {
         let date_input = date;
         let mut result = String::new();
 
-        let start_line_num = self
-            .date_indices
-            .get(date_input.format(YMD_PATTERN).to_string().as_str())?
-            .to_owned();
+        let start_line_num = self.date_indices.get(date_input)?.to_owned();
 
-        let default_date = NaiveDate::default();
-        let next_date = self
-            .date_array
-            .get(self.date_array.binary_search(date_input).unwrap() + 1)
-            .unwrap_or(&default_date);
+        let next_date = self.date_indices.keys().find(|&&date| date > *date_input);
 
-        let default_index = self.history_data.len();
-        let mut next_line_num = self
-            .date_indices
-            .get(next_date.format(YMD_PATTERN).to_string().as_str())
-            .unwrap_or(&default_index)
-            .to_owned();
-
-        if next_line_num != default_index {
-            next_line_num -= 1;
-        }
+        let next_line_num = if let Some(next_date) = next_date {
+            *self.date_indices.get(next_date)? - 1
+        } else {
+            self.history_data.len()
+        };
 
         for line in &self.history_data[start_line_num..next_line_num] {
             // result.push_str(&create_line_with_time(line, i, &date_input));
@@ -174,14 +167,47 @@ impl History {
 
         self.search_by_date(&date).unwrap()
     }
+
+    #[must_use]
+    pub fn before(&self, date: &NaiveDate) -> Option<String> {
+        let date = self.date_indices.keys().filter(|&&d| d >= *date).min()?;
+        let index = self.date_indices.get(date)?;
+
+        if *index == 0 {
+            return None;
+        }
+        let index = index - 1;
+
+        self.history_data
+            .iter()
+            .take(index)
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into()
+    }
+
+    #[must_use]
+    pub fn after(&self, date: &NaiveDate) -> Option<String> {
+        let date = self.date_indices.keys().filter(|&&d| d >= *date).min()?;
+        let index = self.date_indices.get(date)?;
+
+        self.history_data
+            .iter()
+            .skip(*index)
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into()
+    }
 }
 
 fn calc_date_indices(
     history_data: &[String],
     re_date: &Regex,
-) -> (HashMap<String, usize>, Vec<NaiveDate>) {
+) -> (BTreeMap<NaiveDate, usize>, Vec<NaiveDate>) {
     let init_capacity = history_data.len() / 1000usize;
-    let mut result = HashMap::<String, usize>::with_capacity(init_capacity);
+    let mut result = BTreeMap::<NaiveDate, usize>::new();
     let mut date_array = Vec::<NaiveDate>::with_capacity(init_capacity);
     // let mut result = HashMap::<String, usize>::new();
     // let mut date_array = Vec::<NaiveDate>::new();
@@ -196,7 +222,7 @@ fn calc_date_indices(
         if date_tmp >= current {
             current = date_tmp;
 
-            result.insert(line[0..10].to_owned(), i);
+            result.insert(date_tmp, i);
             date_array.push(current);
         }
     }
@@ -224,9 +250,8 @@ fn generate_date(date_string: &str) -> NaiveDate {
 /// cargo test -- --nocapture
 mod tests {
     use super::*;
-    use std::fs;
 
-const CONTENT: &str = "[LINE]MyGroupのトーク履歴
+    const CONTENT: &str = "[LINE]MyGroupのトーク履歴
 保存日時：2024/01/01 00:00
 
 2020/02/29(土)
@@ -264,7 +289,9 @@ const CONTENT: &str = "[LINE]MyGroupのトーク履歴
         assert_eq!(result.unwrap(), "2020/02/29(土)\n13:00\tC\t衛生面に気をつけよう\n13:00\tA\tおはよう\n13:01\tB\tOK\n\n4行\n");
 
         let result = history.search_by_date(&NaiveDate::from_ymd_opt(2023, 7, 21).unwrap());
-        assert_eq!(result.unwrap(), "2023/07/21(金)
+        assert_eq!(
+            result.unwrap(),
+            "2023/07/21(金)
 01:00\tD\t夏だね
 01:01\tA\t\"過去の会話でも見ようか
 2017/01/01(日)
@@ -278,10 +305,14 @@ const CONTENT: &str = "[LINE]MyGroupのトーク履歴
 01:02\tB\tUnit Test はクリアできたかな？
 
 12行
-");
+"
+        );
 
         let result = history.search_by_date(&NaiveDate::from_ymd_opt(2023, 8, 1).unwrap());
-        assert_eq!(result.unwrap(), "2023/08/01(火)\n06:00\tA\t夏だね\n06:11\tD\tおはよう\n\n3行\n");
+        assert_eq!(
+            result.unwrap(),
+            "2023/08/01(火)\n06:00\tA\t夏だね\n06:11\tD\tおはよう\n\n3行\n"
+        );
     }
 
     #[test]
@@ -290,11 +321,17 @@ const CONTENT: &str = "[LINE]MyGroupのトーク履歴
         let history = History::new(&text);
         let result = history.search_by_keyword("OK");
         assert_eq!(result.first().unwrap().line, "B\tOK");
-        assert_eq!(result.first().unwrap().date, NaiveDate::from_ymd_opt(2020, 2, 29).unwrap());
+        assert_eq!(
+            result.first().unwrap().date,
+            NaiveDate::from_ymd_opt(2020, 2, 29).unwrap()
+        );
 
         let result = history.search_by_keyword("あけおめ");
         assert_eq!(result.first().unwrap().line, "A\tあけおめ");
-        assert_eq!(result.first().unwrap().date, NaiveDate::from_ymd_opt(2023, 7, 21).unwrap());
+        assert_eq!(
+            result.first().unwrap().date,
+            NaiveDate::from_ymd_opt(2023, 7, 21).unwrap()
+        );
 
         let result = history.search_by_keyword("よう");
         assert_eq!(result.len(), 6);
@@ -306,5 +343,21 @@ const CONTENT: &str = "[LINE]MyGroupのトーク履歴
         let history = History::new(&text);
         let result = history.search_by_random();
         assert!(!result.is_empty());
+    }
+
+    #[test]
+    fn before_test() {
+        let text = read();
+        let history = History::new(&text);
+        let result = history.before(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap());
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn after_test() {
+        let text = read();
+        let history = History::new(&text);
+        let result = history.after(&NaiveDate::from_ymd_opt(2023, 7, 21).unwrap()).unwrap();
+        assert_eq!(result.lines().count(), 16);
     }
 }
