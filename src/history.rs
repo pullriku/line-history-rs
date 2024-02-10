@@ -12,8 +12,7 @@ const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 pub struct History {
     history_data: Vec<String>,
     date_indices: BTreeMap<NaiveDate, usize>,
-    date_array: Vec<NaiveDate>,
-
+    // date_array: Vec<NaiveDate>,
     re_date: Regex,
     re_time: Regex,
 }
@@ -28,26 +27,6 @@ impl History {
         Ok(Self::new(&data))
     }
 
-    /// Create `LineHistory` structure from lines.
-    #[allow(clippy::missing_panics_doc)]
-    #[must_use]
-    pub fn from_lines(mut lines: Vec<String>) -> Self {
-        let re_date = Regex::new(RE_DATE_S).unwrap();
-
-        lines = lines.into_iter().skip_while(|line| !re_date.is_match(line)).collect();
-
-
-        let (indices, date_array) = calc_date_indices(&lines, &re_date);
-
-        History {
-            history_data: lines,
-            date_indices: indices,
-            date_array,
-            re_date: Regex::new(RE_DATE_S).unwrap(),
-            re_time: Regex::new(RE_TIME_S).unwrap(),
-        }
-    }
-
     /// Create `LineHistory` structure from text.
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
@@ -60,13 +39,26 @@ impl History {
             .map(ToOwned::to_owned)
             .collect::<Vec<String>>();
 
-        let (indices, date_array) = calc_date_indices(&data, &re_date);
+        Self::from_lines(data)
+    }
+
+    /// Create `LineHistory` structure from lines.
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
+    pub fn from_lines(mut lines: Vec<String>) -> Self {
+        let re_date = Regex::new(RE_DATE_S).unwrap();
+
+        lines = lines
+            .into_iter()
+            .skip_while(|line| !re_date.is_match(line))
+            .collect();
+
+        let indices = calc_date_indices(&lines, &re_date);
 
         History {
-            history_data: data,
+            history_data: lines,
             date_indices: indices,
-            date_array,
-            re_date,
+            re_date: Regex::new(RE_DATE_S).unwrap(),
             re_time: Regex::new(RE_TIME_S).unwrap(),
         }
     }
@@ -107,7 +99,6 @@ impl History {
         result.push('\n');
 
         result.push_str(
-            // &format!("{}行<br>", next_line_num - start_line_num)
             &format!("{}行\n", next_line_num - start_line_num),
         );
 
@@ -155,17 +146,15 @@ impl History {
     }
 
     /// Search history by random.
-    ///
-    /// # Panics
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn search_by_random(&self) -> String {
         let mut random = rand::thread_rng();
-        let random_index = random.gen_range(0..self.date_array.len());
+        let random_index = random.gen_range(0..self.date_indices.len());
 
-        let date = self.date_array[random_index];
+        let date = self.date_indices.keys().nth(random_index).unwrap();
 
-        self.search_by_date(&date).unwrap()
+        self.search_by_date(date).unwrap()
     }
 
     #[must_use]
@@ -193,7 +182,10 @@ impl History {
             return None;
         }
 
-        let iter = self.date_indices.keys().filter(|&&d| *start_date <= d && d < *end_date);
+        let iter = self
+            .date_indices
+            .keys()
+            .filter(|&&d| *start_date <= d && d < *end_date);
         let start = self.date_indices.get(iter.clone().min()?)?;
 
         let iter_max = iter.max()?;
@@ -229,33 +221,24 @@ impl History {
     }
 }
 
-fn calc_date_indices(
-    history_data: &[String],
-    re_date: &Regex,
-) -> (BTreeMap<NaiveDate, usize>, Vec<NaiveDate>) {
-    let init_capacity = history_data.len() / 1000usize;
-    let mut result = BTreeMap::<NaiveDate, usize>::new();
-    let mut date_array = Vec::<NaiveDate>::with_capacity(init_capacity);
-    // let mut result = HashMap::<String, usize>::new();
-    // let mut date_array = Vec::<NaiveDate>::new();
-
+fn calc_date_indices(history_data: &[String], re_date: &Regex) -> BTreeMap<NaiveDate, usize> {
     let mut current = NaiveDate::default();
-
-    for (i, line) in history_data.iter().enumerate() {
-        if !re_date.is_match(line) {
-            continue;
-        }
-        let date_tmp = generate_date(&line[0..10]);
-        if date_tmp >= current {
-            current = date_tmp;
-
-            result.insert(date_tmp, i);
-            date_array.push(current);
-        }
+    
+    history_data.iter().enumerate()
+        .filter(|(_i, line)| re_date.is_match(line))
+        // check increasing
+        .filter(|(_i, line)| {
+            let date_tmp = generate_date(&line[0..10]);
+            if date_tmp > current {
+                current = date_tmp;
+                true
+            } else {
+                false
+            }
+        })
+        .map(|(i, line)| (generate_date(&line[0..10]), i))
+        .collect()
     }
-
-    (result, date_array)
-}
 
 fn generate_date(date_string: &str) -> NaiveDate {
     let ymd = date_string
@@ -385,18 +368,22 @@ mod tests {
         let text = read();
         let history = History::new(&text);
         let result = history
-            .between(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(), &NaiveDate::from_ymd_opt(2023, 7, 21).unwrap())
+            .between(
+                &NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(),
+                &NaiveDate::from_ymd_opt(2023, 7, 21).unwrap(),
+            )
             .unwrap();
         assert_eq!(result.lines().count(), 4);
 
         let result = history
-            .between(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(), &NaiveDate::from_ymd_opt(2023, 8, 1).unwrap())
+            .between(
+                &NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(),
+                &NaiveDate::from_ymd_opt(2023, 8, 1).unwrap(),
+            )
             .unwrap();
         assert_eq!(result.lines().count(), 17);
 
-        let result = history
-            .between(&NaiveDate::MIN, &NaiveDate::MAX)
-            .unwrap();
+        let result = history.between(&NaiveDate::MIN, &NaiveDate::MAX).unwrap();
         assert_eq!(result.lines().count(), 21);
     }
 
@@ -404,7 +391,9 @@ mod tests {
     fn after_test() {
         let text = read();
         let history = History::new(&text);
-        let result = history.after(&NaiveDate::from_ymd_opt(2023, 7, 21).unwrap()).unwrap();
+        let result = history
+            .after(&NaiveDate::from_ymd_opt(2023, 7, 21).unwrap())
+            .unwrap();
         assert_eq!(result.lines().count(), 16);
     }
 }
