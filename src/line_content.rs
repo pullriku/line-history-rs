@@ -15,9 +15,9 @@ impl Display for LineContent {
         write!(
             f,
             "{}/{}/{} {}",
-            zero_padding(&self.date.year().to_string(), 4),
-            zero_padding(&self.date.month().to_string(), 2),
-            zero_padding(&self.date.day().to_string(), 2),
+            zero_padding(self.date.year().try_into().unwrap(), 4),
+            zero_padding(self.date.month().try_into().unwrap(), 2),
+            zero_padding(self.date.day().try_into().unwrap(), 2),
             self.line
         )
     }
