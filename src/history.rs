@@ -188,6 +188,33 @@ impl History {
     }
 
     #[must_use]
+    pub fn between(&self, start_date: &NaiveDate, end_date: &NaiveDate) -> Option<String> {
+        if start_date > end_date {
+            return None;
+        }
+
+        let iter = self.date_indices.keys().filter(|&&d| *start_date <= d && d < *end_date);
+        let start = self.date_indices.get(iter.clone().min()?)?;
+
+        let iter_max = iter.max()?;
+        let next_date = self.date_indices.keys().find(|&&date| date > *iter_max);
+        let end = if let Some(next_date) = next_date {
+            *self.date_indices.get(next_date)? - 1
+        } else {
+            self.history_data.len()
+        };
+
+        self.history_data
+            .iter()
+            .skip(*start)
+            .take(end - start)
+            .map(ToOwned::to_owned)
+            .collect::<Vec<_>>()
+            .join("\n")
+            .into()
+    }
+
+    #[must_use]
     pub fn after(&self, date: &NaiveDate) -> Option<String> {
         let date = self.date_indices.keys().filter(|&&d| d >= *date).min()?;
         let index = self.date_indices.get(date)?;
@@ -351,6 +378,26 @@ mod tests {
         let history = History::new(&text);
         let result = history.before(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap());
         assert!(result.is_none());
+    }
+
+    #[test]
+    fn between_test() {
+        let text = read();
+        let history = History::new(&text);
+        let result = history
+            .between(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(), &NaiveDate::from_ymd_opt(2023, 7, 21).unwrap())
+            .unwrap();
+        assert_eq!(result.lines().count(), 4);
+
+        let result = history
+            .between(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(), &NaiveDate::from_ymd_opt(2023, 8, 1).unwrap())
+            .unwrap();
+        assert_eq!(result.lines().count(), 17);
+
+        let result = history
+            .between(&NaiveDate::MIN, &NaiveDate::MAX)
+            .unwrap();
+        assert_eq!(result.lines().count(), 21);
     }
 
     #[test]
