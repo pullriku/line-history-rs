@@ -1,11 +1,19 @@
 [package]
 name = "line-history"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+default = ["calendar"]
+calendar = ["text-calendar"]
+
+[package.metadata.docs.rs]
+all-features = true
 
 [dependencies]
 chrono = "0.4.26"
 rand = "0.8.5"
 regex = "1.9.4"
+text-calendar = { git = "https://github.com/TyomoGit/text-calendar.git", version = "0.2.0", optional = true}

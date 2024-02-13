@@ -11,7 +11,7 @@ const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 
 pub struct History {
     history_data: Vec<String>,
-    date_indices: BTreeMap<NaiveDate, usize>,
+    pub(crate) date_indices: BTreeMap<NaiveDate, usize>,
     // date_array: Vec<NaiveDate>,
     re_date: Regex,
     re_time: Regex,
@@ -98,9 +98,7 @@ impl History {
         }
         result.push('\n');
 
-        result.push_str(
-            &format!("{}行\n", next_line_num - start_line_num),
-        );
+        result.push_str(&format!("{}行\n", next_line_num - start_line_num));
 
         Option::from(result)
     }
@@ -223,8 +221,10 @@ impl History {
 
 fn calc_date_indices(history_data: &[String], re_date: &Regex) -> BTreeMap<NaiveDate, usize> {
     let mut current = NaiveDate::default();
-    
-    history_data.iter().enumerate()
+
+    history_data
+        .iter()
+        .enumerate()
         .filter(|(_i, line)| re_date.is_match(line))
         // check increasing
         .filter(|(_i, line)| {
@@ -238,7 +238,7 @@ fn calc_date_indices(history_data: &[String], re_date: &Regex) -> BTreeMap<Naive
         })
         .map(|(i, line)| (generate_date(&line[0..10]), i))
         .collect()
-    }
+}
 
 fn generate_date(date_string: &str) -> NaiveDate {
     let ymd = date_string
