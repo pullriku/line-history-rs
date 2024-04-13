@@ -9,6 +9,7 @@ const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
 const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
 // const YMD_PATTERN: &str = r"%Y/%m/%d";
 
+#[derive(Debug, Clone)]
 pub struct History {
     history_data: Vec<String>,
     pub(crate) date_indices: BTreeMap<NaiveDate, usize>,
@@ -23,7 +24,7 @@ impl History {
     /// # Errors
     /// Error if file not found.
     pub fn read_from_file(path: &str) -> Result<Self, std::io::Error> {
-        let data: String = fs::read_to_string(path)?.split('\n').skip(3).collect();
+        let data: String = fs::read_to_string(path)?;
         Ok(Self::new(&data))
     }
 
@@ -31,12 +32,9 @@ impl History {
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn new(data: &str) -> Self {
-        let re_date = Regex::new(RE_DATE_S).unwrap();
-
         let data = data
             .lines()
-            .skip_while(|line| !re_date.is_match(line))
-            .map(ToOwned::to_owned)
+            .map(ToString::to_string)
             .collect::<Vec<String>>();
 
         Self::from_lines(data)
@@ -127,7 +125,7 @@ impl History {
                 }
             } else if re_keyword.find(&line).is_some() {
                 if self.re_time.is_match(&line) {
-                    line = line[6..].to_owned();
+                    line = line.chars().skip(6).collect();
                 }
                 let line_count = i - count_start;
 

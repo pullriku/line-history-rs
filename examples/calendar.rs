@@ -2,8 +2,7 @@ use line_history::history::History;
 
 fn main() {
     let history = History::read_from_file("./history.txt").unwrap();
-    let result = history.search_by_keyword("本");
-    for elem in result {
-        println!("{}", elem);
-    }
+    let calendar = history.create_year_calendar(2019).unwrap();
+
+    println!("{calendar}");
 }

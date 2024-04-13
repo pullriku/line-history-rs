@@ -1,8 +1,17 @@
+/// Create zero padding string.
+///
+/// # Examples
+/// ```rust
+/// use line_history::processing::zero_padding;
+///
+/// let result = zero_padding(3, 3);
+/// assert_eq!(result, "003");
+/// ```
 #[allow(clippy::cast_possible_wrap)]
 #[must_use]
-pub fn zero_padding(string: usize, length: u8) -> String {
+pub fn zero_padding(number: usize, length: u8) -> String {
     let mut result = String::new();
-    let string = string.to_string();
+    let string = number.to_string();
 
     for _ in 0..(length as isize - string.len() as isize) {
         result.push('0');
