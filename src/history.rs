@@ -145,8 +145,11 @@ impl History {
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn search_by_random(&self) -> String {
+        let range = 0..self.date_indices.len();
+        assert!(!range.is_empty(), "history is empty");
+
         let mut random = rand::thread_rng();
-        let random_index = random.gen_range(0..self.date_indices.len());
+        let random_index = random.gen_range(range);
 
         let date = self.date_indices.keys().nth(random_index).unwrap();
 
@@ -285,6 +288,8 @@ mod tests {
 06:11\tD\tおはよう
 ";
 
+    const EMPTY: &str = "";
+
     fn read() -> String {
         CONTENT.to_string()
     }
@@ -393,5 +398,25 @@ mod tests {
             .after(&NaiveDate::from_ymd_opt(2023, 7, 21).unwrap())
             .unwrap();
         assert_eq!(result.lines().count(), 16);
+    }
+
+    #[test]
+    #[should_panic(expected = "history is empty")]
+    fn empty_panic() {
+        let history = History::new(EMPTY);
+        assert_eq!(history.search_by_random(), String::new());
+    }
+
+    #[test]
+    fn empty() {
+        let history = History::new(EMPTY);
+
+        assert_eq!(history.search_by_date(&NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()), None);
+        assert_eq!(history.search_by_keyword("OK").len(), 0);
+        assert_eq!(history.before(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap()), None);
+        assert_eq!(history.after(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap()), None);
+        assert_eq!(history.between(&NaiveDate::MIN, &NaiveDate::MAX), None);
+        assert!(history.is_empty());
+        assert_eq!(history.len(), 0);
     }
 }
