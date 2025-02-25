@@ -1,19 +1,24 @@
 [package]
 name = "line-history"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2021"
+authors = ["pullriku"]
+description = "LINE history parser"
+license = "MIT"
+repository = "https://github.com/pullriku/line-history-rs"
+readme = "README.md"
+keywords = ["parser"]
+categories = ["text-processing", "parsing"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-default = ["calendar"]
-calendar = ["text-calendar"]
-
-[package.metadata.docs.rs]
-all-features = true
+[[bench]]
+name = "parse"
+harness = false
 
 [dependencies]
-chrono = "0.4.26"
-rand = "0.8.5"
-regex = "1.9.4"
-text-calendar = { git = "https://github.com/TyomoGit/text-calendar.git", version = "0.3.1", optional = true }
+chrono = "0.4.39"
+rand = "0.9.0"
+
+[dev-dependencies]
+criterion = "0.5.1"

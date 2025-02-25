@@ -1,422 +1,125 @@
-use chrono::{self, NaiveDate};
+use chrono::{NaiveDate, NaiveTime};
 use rand::Rng;
-use regex::Regex;
-use std::{collections::BTreeMap, fs};
+use std::collections::HashMap;
 
-use crate::line_content::LineContent;
-
-const RE_DATE_S: &str = r"^20\d{2}\/\d{1,2}\/\d{1,2}\(.+\)\r?$";
-const RE_TIME_S: &str = r"^(\d{2}):(\d{2}).*";
-// const YMD_PATTERN: &str = r"%Y/%m/%d";
-
-#[derive(Debug, Clone)]
-pub struct History {
-    history_data: Vec<String>,
-    pub(crate) date_indices: BTreeMap<NaiveDate, usize>,
-    // date_array: Vec<NaiveDate>,
-    re_date: Regex,
-    re_time: Regex,
+/// 履歴全体
+#[derive(Debug)]
+pub struct History<'src> {
+    pub(crate) days: HashMap<NaiveDate, Day<'src>>,
 }
 
-impl History {
-    /// Read text file and create `LineHistory` structure.
-    ///  
-    /// # Errors
-    /// Error if file not found.
-    pub fn read_from_file(path: &str) -> Result<Self, std::io::Error> {
-        let data: String = fs::read_to_string(path)?;
-        Ok(Self::new(&data))
+/// 1日分のデータ
+#[derive(Debug)]
+pub struct Day<'src> {
+    pub(crate) date: NaiveDate,
+    pub(crate) chats: Vec<Chat<'src>>,
+}
+
+impl<'src> Day<'src> {
+    /// 日付
+    #[must_use]
+    pub fn date(&self) -> &NaiveDate {
+        &self.date
     }
 
+    /// 1日分のチャットを返す
+    #[must_use]
+    pub fn chats(&self) -> &[Chat<'src>] {
+        &self.chats
+    }
+
+    pub fn search_by_keyword(&self, keyword: &'src str) -> impl Iterator<Item = &Chat<'src>> {
+        self.chats
+            .iter()
+            .filter(move |chat| chat.message_lines.iter().any(|line| line.contains(keyword)))
+    }
+}
+
+/// 1チャットのデータ
+#[derive(Debug)]
+pub struct Chat<'src> {
+    pub(crate) time: NaiveTime,
+    pub(crate) speaker: Option<&'src str>,
+    /// 複数行にまたがる発言内容（各行を保持）
+    pub(crate) message_lines: Vec<&'src str>,
+}
+
+impl<'src> Chat<'src> {
+    #[must_use]
+    pub fn time(&self) -> &NaiveTime {
+        &self.time
+    }
+
+    #[must_use]
+    pub fn sender(&self) -> Option<&'src str> {
+        self.speaker
+    }
+
+    #[must_use]
+    pub fn message_lines(&self) -> &[&'src str] {
+        &self.message_lines
+    }
+}
+
+impl<'src> History<'src> {
     /// Create `LineHistory` structure from text.
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
-    pub fn new(data: &str) -> Self {
-        let data = data
-            .lines()
-            .map(ToString::to_string)
-            .collect::<Vec<String>>();
-
-        Self::from_lines(data)
+    pub fn new(days: HashMap<NaiveDate, Day<'src>>) -> Self {
+        Self { days }
     }
 
-    /// Create `LineHistory` structure from lines.
-    #[allow(clippy::missing_panics_doc)]
     #[must_use]
-    pub fn from_lines(mut lines: Vec<String>) -> Self {
-        let re_date = Regex::new(RE_DATE_S).unwrap();
-
-        lines = lines
-            .into_iter()
-            .skip_while(|line| !re_date.is_match(line))
-            .collect();
-
-        let indices = calc_date_indices(&lines, &re_date);
-
-        History {
-            history_data: lines,
-            date_indices: indices,
-            re_date: Regex::new(RE_DATE_S).unwrap(),
-            re_time: Regex::new(RE_TIME_S).unwrap(),
-        }
+    pub fn days(&self) -> &HashMap<NaiveDate, Day<'src>> {
+        &self.days
     }
 
     #[must_use]
     pub fn len(&self) -> usize {
-        self.history_data.len()
+        self.days.len()
     }
 
     #[must_use]
     pub fn is_empty(&self) -> bool {
-        self.history_data.is_empty()
+        self.days.is_empty()
     }
 
     /// Search history by date.
-    ///
-    /// # Panics
-    /// Panics if date not found.
     #[must_use]
-    pub fn search_by_date(&self, date: &NaiveDate) -> Option<String> {
-        let date_input = date;
-        let mut result = String::new();
-
-        let start_line_num = self.date_indices.get(date_input)?.to_owned();
-
-        let next_date = self.date_indices.keys().find(|&&date| date > *date_input);
-
-        let next_line_num = if let Some(next_date) = next_date {
-            *self.date_indices.get(next_date)? - 1
-        } else {
-            self.history_data.len()
-        };
-
-        for line in &self.history_data[start_line_num..next_line_num] {
-            // result.push_str(&create_line_with_time(line, i, &date_input));
-            result.push_str(&format!("{line}\n"));
-        }
-        result.push('\n');
-
-        result.push_str(&format!("{}行\n", next_line_num - start_line_num));
-
-        Option::from(result)
+    pub fn search_by_date(&self, date: &NaiveDate) -> Option<&Day> {
+        self.days().get(date)
     }
 
     /// Search history by keyword.
-    ///
-    /// # Panics
-    /// Panics if keyword is not correct regex.
-    ///
-    #[must_use]
-    pub fn search_by_keyword(&self, keyword: &str) -> Vec<LineContent> {
-        let re_keyword = Regex::new(keyword).unwrap();
-
-        let mut result = Vec::<LineContent>::new();
-        let mut date = NaiveDate::default();
-        let mut count_start: usize = 0;
-
-        for (i, line) in self.history_data.iter().enumerate() {
-            let mut line = line.to_owned();
-
-            if self.re_date.is_match(&line) {
-                let date_tmp = generate_date(&line[0..10]);
-                if date_tmp >= date {
-                    date = date_tmp;
-                    count_start = i;
-                }
-            } else if re_keyword.find(&line).is_some() {
-                if self.re_time.is_match(&line) {
-                    line = line.chars().skip(6).collect();
-                }
-                let line_count = i - count_start;
-
-                let line_content = LineContent {
-                    date,
-                    line_count,
-                    line: line.clone(),
-                };
-                result.push(line_content);
-            }
-        }
-
-        result
+    pub fn search_by_keyword(
+        &self,
+        keyword: &'src str,
+    ) -> impl Iterator<Item = (&NaiveDate, &Chat<'src>)> {
+        self.days().values().flat_map(|day| {
+            day.search_by_keyword(keyword)
+                .map(move |chat| (day.date(), chat))
+        })
     }
 
     /// Search history by random.
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
-    pub fn search_by_random(&self) -> String {
-        let range = 0..self.date_indices.len();
-        assert!(!range.is_empty(), "history is empty");
+    pub fn search_by_random(&self) -> &Day {
+        let range = 0..self.len();
 
-        let mut random = rand::thread_rng();
-        let random_index = random.gen_range(range);
+        let mut random = rand::rng();
+        let random_index = random.random_range(range);
 
-        let date = self.date_indices.keys().nth(random_index).unwrap();
+        let date = self.days.keys().nth(random_index).unwrap();
 
         self.search_by_date(date).unwrap()
     }
-
-    #[must_use]
-    pub fn before(&self, date: &NaiveDate) -> Option<String> {
-        let date = self.date_indices.keys().filter(|&&d| d >= *date).min()?;
-        let index = self.date_indices.get(date)?;
-
-        if *index == 0 {
-            return None;
-        }
-        let index = index - 1;
-
-        self.history_data
-            .iter()
-            .take(index)
-            .map(ToOwned::to_owned)
-            .collect::<Vec<_>>()
-            .join("\n")
-            .into()
-    }
-
-    #[must_use]
-    pub fn between(&self, start_date: &NaiveDate, end_date: &NaiveDate) -> Option<String> {
-        if start_date > end_date {
-            return None;
-        }
-
-        let iter = self
-            .date_indices
-            .keys()
-            .filter(|&&d| *start_date <= d && d < *end_date);
-        let start = self.date_indices.get(iter.clone().min()?)?;
-
-        let iter_max = iter.max()?;
-        let next_date = self.date_indices.keys().find(|&&date| date > *iter_max);
-        let end = if let Some(next_date) = next_date {
-            *self.date_indices.get(next_date)? - 1
-        } else {
-            self.history_data.len()
-        };
-
-        self.history_data
-            .iter()
-            .skip(*start)
-            .take(end - start)
-            .map(ToOwned::to_owned)
-            .collect::<Vec<_>>()
-            .join("\n")
-            .into()
-    }
-
-    #[must_use]
-    pub fn after(&self, date: &NaiveDate) -> Option<String> {
-        let date = self.date_indices.keys().filter(|&&d| d >= *date).min()?;
-        let index = self.date_indices.get(date)?;
-
-        self.history_data
-            .iter()
-            .skip(*index)
-            .map(ToOwned::to_owned)
-            .collect::<Vec<_>>()
-            .join("\n")
-            .into()
-    }
 }
 
-fn calc_date_indices(history_data: &[String], re_date: &Regex) -> BTreeMap<NaiveDate, usize> {
-    let mut current = NaiveDate::default();
-
-    history_data
-        .iter()
-        .enumerate()
-        .filter(|(_i, line)| re_date.is_match(line))
-        // check increasing
-        .filter(|(_i, line)| {
-            let date_tmp = generate_date(&line[0..10]);
-            if date_tmp > current {
-                current = date_tmp;
-                true
-            } else {
-                false
-            }
-        })
-        .map(|(i, line)| (generate_date(&line[0..10]), i))
-        .collect()
-}
-
-fn generate_date(date_string: &str) -> NaiveDate {
-    let ymd = date_string
-        .split('/')
-        .map(|elem| elem.parse::<u16>().unwrap_or_default())
-        .collect::<Vec<u16>>();
-
-    if ymd.len() != 3 {
-        return NaiveDate::default();
-    }
-
-    let parse_result =
-        NaiveDate::from_ymd_opt(i32::from(ymd[0]), u32::from(ymd[1]), u32::from(ymd[2]));
-
-    parse_result.unwrap_or_default()
-}
-
-#[cfg(test)]
-/// cargo test -- --nocapture
-mod tests {
-    use super::*;
-
-    const CONTENT: &str = "[LINE]MyGroupのトーク履歴
-保存日時：2024/01/01 00:00
-
-2020/02/29(土)
-13:00\tC\t衛生面に気をつけよう
-13:00\tA\tおはよう
-13:01\tB\tOK
-
-2023/07/21(金)
-01:00\tD\t夏だね
-01:01\tA\t\"過去の会話でも見ようか
-2017/01/01(日)
-00:00\tA\tあけおめ
-000:01\tB\tおめでとう
-
-2020/02/29(土)
-13:00\tC\t衛生面に気をつけよう
-13:00\tA\tおはよう
-13:01\tB\tOK\"
-01:02\tB\tUnit Test はクリアできたかな？
-
-2023/08/01(火)
-06:00\tA\t夏だね
-06:11\tD\tおはよう
-";
-
-    const EMPTY: &str = "";
-
-    fn read() -> String {
-        CONTENT.to_string()
-    }
-
-    #[test]
-    fn search_by_date_test() {
-        let text = read();
-        let history = History::new(&text);
-        let result = history.search_by_date(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap());
-        assert_eq!(result.unwrap(), "2020/02/29(土)\n13:00\tC\t衛生面に気をつけよう\n13:00\tA\tおはよう\n13:01\tB\tOK\n\n4行\n");
-
-        let result = history.search_by_date(&NaiveDate::from_ymd_opt(2023, 7, 21).unwrap());
-        assert_eq!(
-            result.unwrap(),
-            "2023/07/21(金)
-01:00\tD\t夏だね
-01:01\tA\t\"過去の会話でも見ようか
-2017/01/01(日)
-00:00\tA\tあけおめ
-000:01\tB\tおめでとう
-
-2020/02/29(土)
-13:00\tC\t衛生面に気をつけよう
-13:00\tA\tおはよう
-13:01\tB\tOK\"
-01:02\tB\tUnit Test はクリアできたかな？
-
-12行
-"
-        );
-
-        let result = history.search_by_date(&NaiveDate::from_ymd_opt(2023, 8, 1).unwrap());
-        assert_eq!(
-            result.unwrap(),
-            "2023/08/01(火)\n06:00\tA\t夏だね\n06:11\tD\tおはよう\n\n3行\n"
-        );
-    }
-
-    #[test]
-    fn search_test() {
-        let text = read();
-        let history = History::new(&text);
-        let result = history.search_by_keyword("OK");
-        assert_eq!(result.first().unwrap().line, "B\tOK");
-        assert_eq!(
-            result.first().unwrap().date,
-            NaiveDate::from_ymd_opt(2020, 2, 29).unwrap()
-        );
-
-        let result = history.search_by_keyword("あけおめ");
-        assert_eq!(result.first().unwrap().line, "A\tあけおめ");
-        assert_eq!(
-            result.first().unwrap().date,
-            NaiveDate::from_ymd_opt(2023, 7, 21).unwrap()
-        );
-
-        let result = history.search_by_keyword("よう");
-        assert_eq!(result.len(), 6);
-    }
-
-    #[test]
-    fn random_test() {
-        let text = read();
-        let history = History::new(&text);
-        let result = history.search_by_random();
-        assert!(!result.is_empty());
-    }
-
-    #[test]
-    fn before_test() {
-        let text = read();
-        let history = History::new(&text);
-        let result = history.before(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap());
-        assert!(result.is_none());
-    }
-
-    #[test]
-    fn between_test() {
-        let text = read();
-        let history = History::new(&text);
-        let result = history
-            .between(
-                &NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(),
-                &NaiveDate::from_ymd_opt(2023, 7, 21).unwrap(),
-            )
-            .unwrap();
-        assert_eq!(result.lines().count(), 4);
-
-        let result = history
-            .between(
-                &NaiveDate::from_ymd_opt(2020, 2, 29).unwrap(),
-                &NaiveDate::from_ymd_opt(2023, 8, 1).unwrap(),
-            )
-            .unwrap();
-        assert_eq!(result.lines().count(), 17);
-
-        let result = history.between(&NaiveDate::MIN, &NaiveDate::MAX).unwrap();
-        assert_eq!(result.lines().count(), 21);
-    }
-
-    #[test]
-    fn after_test() {
-        let text = read();
-        let history = History::new(&text);
-        let result = history
-            .after(&NaiveDate::from_ymd_opt(2023, 7, 21).unwrap())
-            .unwrap();
-        assert_eq!(result.lines().count(), 16);
-    }
-
-    #[test]
-    #[should_panic(expected = "history is empty")]
-    fn empty_panic() {
-        let history = History::new(EMPTY);
-        assert_eq!(history.search_by_random(), String::new());
-    }
-
-    #[test]
-    fn empty() {
-        let history = History::new(EMPTY);
-
-        assert_eq!(history.search_by_date(&NaiveDate::from_ymd_opt(2024, 1, 1).unwrap()), None);
-        assert_eq!(history.search_by_keyword("OK").len(), 0);
-        assert_eq!(history.before(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap()), None);
-        assert_eq!(history.after(&NaiveDate::from_ymd_opt(2020, 2, 29).unwrap()), None);
-        assert_eq!(history.between(&NaiveDate::MIN, &NaiveDate::MAX), None);
-        assert!(history.is_empty());
-        assert_eq!(history.len(), 0);
+#[must_use]
+pub fn ignore_errors<'src, E>(result: Result<History<'src>, (History<'src>, Vec<E>)>) -> History<'src> {
+    match result {
+        Ok(history) => history,
+        Err((history_incomplete, _)) => history_incomplete,
     }
 }

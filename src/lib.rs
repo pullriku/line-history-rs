@@ -1,8 +1,5 @@
 #![warn(clippy::pedantic)]
 
 pub mod history;
-pub mod line_content;
-pub mod processing;
-
-#[cfg(feature = "calendar")]
-pub mod calendar;
+pub mod macros;
+pub mod parse;

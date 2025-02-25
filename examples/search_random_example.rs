@@ -1,7 +1,8 @@
-use line_history::history::History;
+use line_history::{history::ignore_errors, read_from_file};
 
 fn main() {
-    let history = History::read_from_file("./history.txt").unwrap();
+    read_from_file!("./history.txt", let src, let history);
+    let history = ignore_errors(history);
     let result = history.search_by_random();
-    println!("{}", result);
+    println!("{:?}", result);
 }
