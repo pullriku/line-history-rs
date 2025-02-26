@@ -63,10 +63,18 @@ impl<'src> Chat<'src> {
 
 impl<'src> History<'src> {
     /// Create `LineHistory` structure from text.
-    #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn new(days: HashMap<NaiveDate, Day<'src>>) -> Self {
         Self { days }
+    }
+
+    /// Create `LineHistory` structure from text.
+    #[must_use]
+    pub fn from_text(text: &'src str) -> Self {
+        match crate::parse::parse_history(text) {
+            Ok(history) => history,
+            Err((history_incomplete, _)) => history_incomplete,
+        }
     }
 
     #[must_use]
