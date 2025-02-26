@@ -12,6 +12,19 @@ pub struct History<'src> {
     pub(crate) days: HashMap<NaiveDate, Day<'src>>,
 }
 
+impl<'src> History<'src> {
+    /// Create `LineHistory` structure from text.
+    #[must_use]
+    pub fn new(days: HashMap<NaiveDate, Day<'src>>) -> Self {
+        Self { days }
+    }
+
+    #[must_use]
+    pub fn into_owned(self) -> OwnedHistory {
+        self.into()
+    }
+}
+
 impl Search for History<'_> {}
 
 impl<'src> SearchByDate for History<'src> {
@@ -88,6 +101,13 @@ impl<'src> DayData<Chat<'src>> for Day<'src> {
     }
 }
 
+impl Day<'_> {
+    #[must_use]
+    pub fn into_owned(self) -> OwnedDay {
+        self.into()
+    }
+}
+
 /// 1チャットのデータ
 #[derive(Debug, Clone)]
 pub struct Chat<'src> {
@@ -112,11 +132,10 @@ impl<'src> ChatData for Chat<'src> {
     }
 }
 
-impl<'src> History<'src> {
-    /// Create `LineHistory` structure from text.
+impl Chat<'_> {
     #[must_use]
-    pub fn new(days: HashMap<NaiveDate, Day<'src>>) -> Self {
-        Self { days }
+    pub fn into_owned(self) -> OwnedChat {
+        self.into()
     }
 }
 
@@ -174,10 +193,40 @@ impl<'src> HistoryData<'src, OwnedDay, OwnedChat> for OwnedHistory {
     }
 }
 
+impl<'src> From<History<'src>> for OwnedHistory {
+    fn from(history: History<'src>) -> Self {
+        let days = history
+            .days
+            .into_iter()
+            .map(|(date, day)| (date, day.into()))
+            .collect();
+        OwnedHistory { days }
+    }
+}
+
+impl OwnedHistory {
+    #[must_use]
+    pub fn as_ref_history(&self) -> History<'_> {
+        History {
+            days: self.days.iter().map(|(date, day)| (*date, day.as_ref_day())).collect(),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct OwnedDay {
     pub date: NaiveDate,
     pub chats: Vec<OwnedChat>,
+}
+
+impl DayData<OwnedChat> for OwnedDay {
+    fn date(&self) -> &NaiveDate {
+        &self.date
+    }
+
+    fn chats(&self) -> &[OwnedChat] {
+        &self.chats
+    }
 }
 
 impl SearchByKeyword for OwnedDay {
@@ -190,13 +239,26 @@ impl SearchByKeyword for OwnedDay {
     }
 }
 
-impl DayData<OwnedChat> for OwnedDay {
-    fn date(&self) -> &NaiveDate {
-        &self.date
+impl<'src> From<Day<'src>> for OwnedDay {
+    fn from(day: Day<'src>) -> Self {
+        let chats = day
+            .chats
+            .into_iter()
+            .map(std::convert::Into::into)
+            .collect();
+        OwnedDay {
+            date: day.date,
+            chats,
+        }
     }
+}
 
-    fn chats(&self) -> &[OwnedChat] {
-        &self.chats
+impl OwnedDay {
+    pub fn as_ref_day(&self) -> Day<'_> {
+        Day {
+            date: self.date,
+            chats: self.chats.iter().map(OwnedChat::as_ref_chat).collect(),
+        }
     }
 }
 
@@ -222,31 +284,6 @@ impl ChatData for OwnedChat {
     }
 }
 
-impl<'src> From<History<'src>> for OwnedHistory {
-    fn from(history: History<'src>) -> Self {
-        let days = history
-            .days
-            .into_iter()
-            .map(|(date, day)| (date, day.into()))
-            .collect();
-        OwnedHistory { days }
-    }
-}
-
-impl<'src> From<Day<'src>> for OwnedDay {
-    fn from(day: Day<'src>) -> Self {
-        let chats = day
-            .chats
-            .into_iter()
-            .map(std::convert::Into::into)
-            .collect();
-        OwnedDay {
-            date: day.date,
-            chats,
-        }
-    }
-}
-
 impl<'src> From<Chat<'src>> for OwnedChat {
     fn from(chat: Chat<'src>) -> Self {
         OwnedChat {
@@ -261,11 +298,13 @@ impl<'src> From<Chat<'src>> for OwnedChat {
     }
 }
 
-// Alternatively, you could implement an `into_owned` method on History.
-impl History<'_> {
-    #[must_use]
-    pub fn into_owned(self) -> OwnedHistory {
-        self.into()
+impl OwnedChat {
+    pub fn as_ref_chat(&self) -> Chat<'_> {
+        Chat {
+            time: self.time,
+            speaker: self.speaker.as_deref(),
+            message_lines: self.message_lines.iter().map(AsRef::as_ref).collect(),
+        }
     }
 }
 
