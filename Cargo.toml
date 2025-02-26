@@ -1,7 +1,7 @@
 [package]
 name = "line-history"
-version = "0.7.0"
-edition = "2021"
+version = "0.8.0"
+edition = "2024"
 authors = ["pullriku"]
 description = "LINE history parser"
 license = "MIT"
@@ -12,13 +12,16 @@ categories = ["text-processing", "parsing"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["rand"]
+
 [[bench]]
 name = "parse"
 harness = false
 
 [dependencies]
 chrono = "0.4.39"
-rand = "0.9.0"
+rand = {version = "0.9.0", optional = true}
 
 [dev-dependencies]
 criterion = "0.5.1"

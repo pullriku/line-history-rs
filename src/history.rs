@@ -102,6 +102,7 @@ impl<'src> History<'src> {
     }
 
     /// Search history by random.
+    #[cfg(feature = "rand")]
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
     pub fn search_by_random(&self) -> &Day {
@@ -117,7 +118,9 @@ impl<'src> History<'src> {
 }
 
 #[must_use]
-pub fn ignore_errors<'src, E>(result: Result<History<'src>, (History<'src>, Vec<E>)>) -> History<'src> {
+pub fn ignore_errors<'src, E>(
+    result: Result<History<'src>, (History<'src>, Vec<E>)>,
+) -> History<'src> {
     match result {
         Ok(history) => history,
         Err((history_incomplete, _)) => history_incomplete,
