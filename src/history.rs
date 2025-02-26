@@ -24,7 +24,7 @@ impl<'src> SearchByDate for History<'src> {
 
 impl<'src> SearchByKeyword for History<'src> {
     type Chat = Chat<'src>;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = &Self::Chat> {
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
         self.days
             .values()
             .flat_map(move |day| day.search_by_keyword(keyword))
@@ -70,8 +70,11 @@ pub struct Day<'src> {
 
 impl<'src> SearchByKeyword for Day<'src> {
     type Chat = Chat<'src>;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = &Self::Chat> {
-        self.chats.iter().filter(move |chat| chat.contains(keyword))
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
+        self.chats
+            .iter()
+            .map(move |chat| (self.date, chat))
+            .filter(move |(_, chat)| chat.contains(keyword))
     }
 }
 
@@ -134,7 +137,7 @@ impl SearchByDate for OwnedHistory {
 
 impl SearchByKeyword for OwnedHistory {
     type Chat = OwnedChat;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = &Self::Chat> {
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
         self.days
             .values()
             .flat_map(move |day| day.search_by_keyword(keyword))
@@ -179,8 +182,11 @@ pub struct OwnedDay {
 
 impl SearchByKeyword for OwnedDay {
     type Chat = OwnedChat;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = &Self::Chat> {
-        self.chats.iter().filter(move |chat| chat.contains(keyword))
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
+        self.chats
+            .iter()
+            .map(move |chat| (self.date, chat))
+            .filter(move |(_, chat)| chat.contains(keyword))
     }
 }
 

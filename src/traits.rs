@@ -12,7 +12,7 @@ pub trait SearchByDate {
 
 pub trait SearchByKeyword {
     type Chat: ChatData;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = &Self::Chat>;
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)>;
 }
 
 pub trait SearchByRandom {
