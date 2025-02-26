@@ -1,5 +1,9 @@
 use chrono::NaiveDate;
-use line_history::{history::ignore_errors, read_from_file};
+use line_history::{
+    history::ignore_errors,
+    read_from_file,
+    traits::{ChatData, DayData, SearchByDate},
+};
 
 fn main() {
     read_from_file!("./history.txt", let src, let history);
