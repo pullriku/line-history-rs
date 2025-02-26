@@ -13,65 +13,16 @@ pub enum ParseError<'src> {
     InternalError { line: &'src str, error: &'src str },
 }
 
-fn skip_header(src: &str) -> Option<&str> {
-    let crlf_3rd_index = src.match_indices("\r\n").nth(2)?.0;
-    src.get(crlf_3rd_index + "\r\n".len()..)
-}
-
-/// "HH:MM\t"形式の行かどうかを判定する
-#[must_use]
-pub fn is_chat_start(line: &str) -> bool {
-    if line.len() < 6 {
-        return false;
-    }
-    let mut chars = line.chars();
-    let h1 = chars.next();
-    let h2 = chars.next();
-    let colon = chars.next();
-    let m1 = chars.next();
-    let m2 = chars.next();
-    let tab = chars.next();
-    matches!(
-        (h1, h2, colon, m1, m2, tab),
-        (Some(c1), Some(c2), Some(':'), Some(c3), Some(c4), Some('\t'))
-        if c1.is_ascii_digit() && c2.is_ascii_digit() && c3.is_ascii_digit() && c4.is_ascii_digit()
-    )
-}
-
-fn is_day_start(line: &str) -> bool {
-    let Some(date_candidate) = line.get(..10) else {
-        return false;
-    };
-
-    let mut sections = date_candidate.split('/');
-    for _ in 0..3 {
-        let Some(section) = sections.next() else {
-            return false;
-        };
-        let mut chars = section.chars();
-        let (Some(c1), Some(c2)) = (chars.next(), chars.next()) else {
-            return false;
-        };
-        if !(c1.is_ascii_digit() && c2.is_ascii_digit()) {
-            return false;
-        }
-    }
-
-    true
-}
-
-/// 入力全体のチャット履歴（History）をパースする。
-/// 各部分は元の &str からのスライスとして保持するため、コピーは発生しません。
+/// Parses the entire chat history (History) from the input.
+/// Each part is retained as a slice from the original &str, so no copying occurs.
 ///
 /// # Errors
-/// フォーマットと異なる場合には、`ParseError` を返します。
-pub fn parse_history<'src>(
-    input: &'src str,
-) -> Result<History<'src>, (History<'src>, Vec<ParseError<'src>>)> {
+/// Returns `ParseError` if the format is incorrect.
+pub fn parse_history(input: &str) -> Result<History<'_>, (History<'_>, Vec<ParseError<'_>>)> {
     let Some(first_line) = input.lines().next() else {
         return Err((History::new(HashMap::new()), vec![ParseError::EmptyFile]));
     };
-    let input = if is_day_start(first_line) {
+    let input = if parse_date_line(first_line).is_some() {
         input
     } else {
         skip_header(input).unwrap_or_default()
@@ -82,74 +33,23 @@ pub fn parse_history<'src>(
 
     let mut current_date: Option<NaiveDate> = None;
 
-    // 各日付セクションは "\r\n\r\n" で区切られている
+    // Each date section is separated by "\r\n\r\n"
     for section in input.split("\r\n\r\n") {
         if section.is_empty() {
             continue;
         }
         let mut lines = section.split("\r\n");
-        // セクションの最初の行は日付行（例: "2025/01/01(水)"）
+        // The first line of the section is the date line (e.g., "2025/01/01(水)")
         let Some(date_line) = lines.next() else {
             continue;
         };
 
-        // 日付部分は '(' より前を抽出し、空白を除去
-        let date_str = date_line.get(..10).unwrap_or_default();
+        // Parse the date line into a NaiveDate (format example: "%Y/%m/%d")
+        let date_parsed = parse_date_line(date_line);
 
-        // NaiveDateとしてパース（フォーマット例: "%Y/%m/%d"）
-        let date_parsed = NaiveDate::parse_from_str(date_str, "%Y/%m/%d").ok();
-
-        let mut chats = Vec::new();
-        let mut current_chat: Option<Chat<'src>> = None;
-
-        // 日付行以降の各行を処理
-        for line in lines {
-            if is_chat_start(line) {
-                // 新たなチャット開始前に、既存のチャットがあれば確定
-                if let Some(chat) = current_chat.take() {
-                    chats.push(chat);
-                }
-                let mut parts = line.splitn(3, '\t');
-                let Some(time_str) = parts.next() else {
-                    errors.push(ParseError::InvalidEntry(line));
-                    continue;
-                };
-                let Ok(time) = NaiveTime::parse_from_str(time_str, "%H:%M") else {
-                    errors.push(ParseError::InvalidTime(time_str));
-                    continue;
-                };
-                let Some(speaker_str) = parts.next() else {
-                    errors.push(ParseError::InvalidEntry(line));
-                    continue;
-                };
-                // 発言者が空文字の場合はNone
-                let speaker = if speaker_str.trim().is_empty() {
-                    None
-                } else {
-                    Some(speaker_str)
-                };
-                let Some(message_line) = parts.next() else {
-                    errors.push(ParseError::InvalidEntry(line));
-                    continue;
-                };
-                current_chat = Some(Chat {
-                    time,
-                    speaker,
-                    message_lines: vec![message_line],
-                });
-            } else {
-                // チャット開始行でない場合、前回のチャットの継続行として追加
-                if let Some(ref mut chat) = current_chat {
-                    chat.message_lines.push(line);
-                } else {
-                    errors.push(ParseError::ContinuationBeforeEntry(line));
-                }
-            }
-        }
-        // セクション最後のチャットを追加
-        if let Some(chat) = current_chat {
-            chats.push(chat);
-        }
+        let (mut chats, mut section_errors) = parse_chats(lines);
+        errors.append(&mut section_errors);
+        drop(section_errors);
 
         if let Some(date) = date_parsed {
             days.insert(date, Day { date, chats });
@@ -169,7 +69,7 @@ pub fn parse_history<'src>(
                 });
                 continue;
             };
-            day.chats.extend(chats);
+            day.chats.append(&mut chats);
         }
     }
 
@@ -178,6 +78,94 @@ pub fn parse_history<'src>(
     } else {
         Err((History::new(days), errors))
     }
+}
+
+/// Extracts the first 10 characters from the date line (e.g., "2025/01/01")
+/// and parses it into a `NaiveDate`. Returns None if parsing fails.
+fn parse_date_line(date_line: &str) -> Option<NaiveDate> {
+    let date_str = date_line.get(..10)?;
+    NaiveDate::parse_from_str(date_str, "%Y/%m/%d").ok()
+}
+
+fn skip_header(src: &str) -> Option<&str> {
+    let crlf_3rd_index = src.match_indices("\r\n").nth(2)?.0;
+    src.get(crlf_3rd_index + "\r\n".len()..)
+}
+
+/// Determines whether the line is in the "HH:MM\t" format.
+fn is_chat_start(line: &str) -> bool {
+    if line.len() < 6 {
+        return false;
+    }
+    let mut chars = line.chars();
+    let h1 = chars.next();
+    let h2 = chars.next();
+    let colon = chars.next();
+    let m1 = chars.next();
+    let m2 = chars.next();
+    let tab = chars.next();
+    matches!(
+        (h1, h2, colon, m1, m2, tab),
+        (Some(c1), Some(c2), Some(':'), Some(c3), Some(c4), Some('\t'))
+            if c1.is_ascii_digit() && c2.is_ascii_digit() && c3.is_ascii_digit() && c4.is_ascii_digit()
+    )
+}
+
+/// Parses chat information from the given iterator over lines.
+///
+/// Processes chat starting lines and their continuation lines,
+/// returning a vector of chats and a vector of errors.
+fn parse_chats<'src, I>(lines: I) -> (Vec<Chat<'src>>, Vec<ParseError<'src>>)
+where
+    I: Iterator<Item = &'src str>,
+{
+    let mut chats = Vec::new();
+    let mut errors = Vec::new();
+    let mut current_chat: Option<Chat<'src>> = None;
+
+    for line in lines {
+        if is_chat_start(line) {
+            // Finalize the existing chat and start a new chat.
+            if let Some(chat) = current_chat.take() {
+                chats.push(chat);
+            }
+            match parse_chat_entry(line) {
+                Ok(chat) => current_chat = Some(chat),
+                Err(err) => errors.push(err),
+            }
+        } else {
+            // If the line is not a chat starting line, add it as a continuation of the previous chat.
+            if let Some(ref mut chat) = current_chat {
+                chat.message_lines.push(line);
+            } else if !line.trim().is_empty() {
+                errors.push(ParseError::ContinuationBeforeEntry(line));
+            }
+        }
+    }
+    if let Some(chat) = current_chat {
+        chats.push(chat);
+    }
+    (chats, errors)
+}
+
+/// Parses a chat starting line (a line beginning with "HH:MM\t") and generates a Chat.
+fn parse_chat_entry(line: &str) -> Result<Chat<'_>, ParseError<'_>> {
+    let mut parts = line.splitn(3, '\t');
+    let time_str = parts.next().ok_or(ParseError::InvalidEntry(line))?;
+    let time = NaiveTime::parse_from_str(time_str, "%H:%M")
+        .map_err(|_| ParseError::InvalidTime(time_str))?;
+    let speaker_str = parts.next().ok_or(ParseError::InvalidEntry(line))?;
+    let speaker = if speaker_str.trim().is_empty() {
+        None
+    } else {
+        Some(speaker_str)
+    };
+    let message_line = parts.next().ok_or(ParseError::InvalidEntry(line))?;
+    Ok(Chat {
+        time,
+        speaker,
+        message_lines: vec![message_line],
+    })
 }
 
 #[cfg(test)]
@@ -215,7 +203,7 @@ mod tests {
 06:11\tD\tおはよう\r
 ";
     #[test]
-    fn test_ai() {
+    fn test_parse() {
         let history = parse_history(CONTENT).unwrap();
         assert_eq!(history.days.len(), 4);
         assert_eq!(
