@@ -3,13 +3,13 @@ use rand::Rng;
 use std::collections::HashMap;
 
 /// 履歴全体
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct History<'src> {
     pub(crate) days: HashMap<NaiveDate, Day<'src>>,
 }
 
 /// 1日分のデータ
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Day<'src> {
     pub(crate) date: NaiveDate,
     pub(crate) chats: Vec<Chat<'src>>,
@@ -36,7 +36,7 @@ impl<'src> Day<'src> {
 }
 
 /// 1チャットのデータ
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Chat<'src> {
     pub(crate) time: NaiveTime,
     pub(crate) speaker: Option<&'src str>,
@@ -122,6 +122,63 @@ impl<'src> History<'src> {
         let date = self.days.keys().nth(random_index).unwrap();
 
         self.search_by_date(date).unwrap()
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct OwnedHistory {
+    pub days: HashMap<NaiveDate, OwnedDay>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OwnedDay {
+    pub date: NaiveDate,
+    pub chats: Vec<OwnedChat>,
+}
+
+#[derive(Debug, Clone)]
+pub struct OwnedChat {
+    pub time: NaiveTime,
+    pub speaker: Option<String>,
+    pub message_lines: Vec<String>,
+}
+
+impl<'src> From<History<'src>> for OwnedHistory {
+    fn from(history: History<'src>) -> Self {
+        let days = history
+            .days
+            .into_iter()
+            .map(|(date, day)| (date, day.into()))
+            .collect();
+        OwnedHistory { days }
+    }
+}
+
+impl<'src> From<Day<'src>> for OwnedDay {
+    fn from(day: Day<'src>) -> Self {
+        let chats = day.chats.into_iter().map(std::convert::Into::into).collect();
+        OwnedDay {
+            date: day.date,
+            chats,
+        }
+    }
+}
+
+impl<'src> From<Chat<'src>> for OwnedChat {
+    fn from(chat: Chat<'src>) -> Self {
+        OwnedChat {
+            time: chat.time,
+            speaker: chat.speaker.map(std::borrow::ToOwned::to_owned),
+            message_lines: chat.message_lines.into_iter().map(std::borrow::ToOwned::to_owned).collect(),
+        }
+    }
+}
+
+// Alternatively, you could implement an `into_owned` method on History.
+impl History<'_> {
+    #[must_use]
+    pub fn into_owned(self) -> OwnedHistory {
+        self.into()
     }
 }
 
