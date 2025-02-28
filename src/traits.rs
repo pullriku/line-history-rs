@@ -2,7 +2,10 @@ use chrono::{NaiveDate, NaiveTime};
 use std::{borrow::Borrow, collections::HashMap};
 
 /// Search history
+#[cfg(feature = "rand")]
 pub trait Search: SearchByDate + SearchByKeyword + SearchByRandom {}
+#[cfg(not(feature = "rand"))]
+pub trait Search: SearchByDate + SearchByKeyword {}
 
 pub trait SearchByDate {
     type Day: DayData<Self::Chat>;

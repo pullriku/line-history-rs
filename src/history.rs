@@ -1,9 +1,8 @@
 use chrono::{NaiveDate, NaiveTime};
-use rand::Rng;
 use std::collections::HashMap;
 
 use crate::traits::{
-    ChatData, DayData, HistoryData, Search, SearchByDate, SearchByKeyword, SearchByRandom,
+    ChatData, DayData, HistoryData, Search, SearchByDate, SearchByKeyword,
 };
 
 /// 履歴全体
@@ -41,15 +40,6 @@ impl<'src> SearchByKeyword for History<'src> {
         self.days
             .values()
             .flat_map(move |day| day.search_by_keyword(keyword))
-    }
-}
-
-impl<'src> SearchByRandom for History<'src> {
-    type Day = Day<'src>;
-    fn search_by_random(&self) -> &Self::Day {
-        let mut rng = rand::rng();
-        let index = rng.random_range(0..self.len());
-        self.days.values().nth(index).unwrap()
     }
 }
 
@@ -160,15 +150,6 @@ impl SearchByKeyword for OwnedHistory {
         self.days
             .values()
             .flat_map(move |day| day.search_by_keyword(keyword))
-    }
-}
-
-impl SearchByRandom for OwnedHistory {
-    type Day = OwnedDay;
-    fn search_by_random(&self) -> &Self::Day {
-        let mut rng = rand::rng();
-        let index = rng.random_range(0..self.len());
-        self.days.values().nth(index).unwrap()
     }
 }
 
