@@ -2,7 +2,7 @@ use chrono::{NaiveDate, NaiveTime};
 use std::collections::HashMap;
 
 use crate::traits::{
-    ChatData, DayData, HistoryData, Search, SearchByDate, SearchByKeyword,
+    ChatData, DayData, HistoryData, Search, SearchByDate, SearchByKeyword, SearchByKeywordResult,
 };
 
 /// 履歴全体
@@ -36,7 +36,7 @@ impl<'src> SearchByDate for History<'src> {
 
 impl<'src> SearchByKeyword for History<'src> {
     type Chat = Chat<'src>;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = SearchByKeywordResult<Self::Chat>> {
         self.days
             .values()
             .flat_map(move |day| day.search_by_keyword(keyword))
@@ -73,11 +73,12 @@ pub struct Day<'src> {
 
 impl<'src> SearchByKeyword for Day<'src> {
     type Chat = Chat<'src>;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = SearchByKeywordResult<Self::Chat>> {
         self.chats
             .iter()
-            .map(move |chat| (self.date, chat))
-            .filter(move |(_, chat)| chat.contains(keyword))
+            .enumerate()
+            .map(move |(i, chat)| SearchByKeywordResult{ date: self.date, chat, index: i })
+            .filter(move |SearchByKeywordResult { chat, ..}| chat.contains(keyword))
     }
 }
 
@@ -146,7 +147,7 @@ impl SearchByDate for OwnedHistory {
 
 impl SearchByKeyword for OwnedHistory {
     type Chat = OwnedChat;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = SearchByKeywordResult<Self::Chat>> {
         self.days
             .values()
             .flat_map(move |day| day.search_by_keyword(keyword))
@@ -212,11 +213,12 @@ impl DayData<OwnedChat> for OwnedDay {
 
 impl SearchByKeyword for OwnedDay {
     type Chat = OwnedChat;
-    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = (NaiveDate, &Self::Chat)> {
+    fn search_by_keyword(&self, keyword: &str) -> impl Iterator<Item = SearchByKeywordResult<Self::Chat>> {
         self.chats
             .iter()
-            .map(move |chat| (self.date, chat))
-            .filter(move |(_, chat)| chat.contains(keyword))
+            .enumerate()
+            .map(move |(i, chat)| SearchByKeywordResult{ date: self.date, chat, index: i })
+            .filter(move |SearchByKeywordResult { chat, ..}| chat.contains(keyword))
     }
 }
 

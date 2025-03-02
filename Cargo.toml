@@ -1,6 +1,6 @@
 [package]
 name = "line-history"
-version = "0.15.0"
+version = "0.16.0"
 edition = "2021"
 authors = ["pullriku"]
 description = "LINE history parser"
@@ -21,7 +21,7 @@ name = "parse"
 harness = false
 
 [dependencies]
-chrono = "0.4.39"
+chrono = "0.4.40"
 rand = { version = "0.9.0", optional = true}
 
 [dev-dependencies]
